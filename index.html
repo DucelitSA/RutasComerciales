@@ -53,7 +53,7 @@ let importRows   = [];
 // ═══════════════════════════════════════════════
 //  AUTH LISTENER
 // ═══════════════════════════════════════════════
-onAuthStateChanged(auth, async user => {
+auth.onAuthStateChanged(async user => {
   if (user) {
     currentUser = user;
     const snap = await db.collection('usuarios').doc(user.uid).get();
@@ -117,9 +117,6 @@ window.doLogin = async () => {
   }
 };
 window.doLogout = () => auth.signOut();
-
-document.getElementById('login-pass').addEventListener('keydown', e => { if(e.key==='Enter') window.doLogin(); });
-document.getElementById('login-user').addEventListener('keydown', e => { if(e.key==='Enter') window.doLogin(); });
 
 function showLogin() {
   document.getElementById('login-screen').style.display = 'flex';
@@ -1161,8 +1158,13 @@ function openModal(id){document.getElementById(id).classList.add('open');}
 function closeModal(id){document.getElementById(id).classList.remove('open');}
 window.closeModal=closeModal;
 
-document.querySelectorAll('.modal-overlay').forEach(o=>{
-  o.addEventListener('click',e=>{if(e.target===o)o.classList.remove('open');});
+// Init after DOM is ready
+window.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('.modal-overlay').forEach(o=>{
+    o.addEventListener('click',e=>{if(e.target===o)o.classList.remove('open');});
+  });
+  document.getElementById('login-pass')?.addEventListener('keydown', e=>{ if(e.key==='Enter') window.doLogin(); });
+  document.getElementById('login-user')?.addEventListener('keydown', e=>{ if(e.key==='Enter') window.doLogin(); });
 });
 </script>
 
