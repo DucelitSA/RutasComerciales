@@ -453,10 +453,12 @@ window.openDireccionModal = (id=null) => {
     setV('dir-vehiculo',d.vehiculo||'Furgón'); setV('dir-matricula',d.matricula||'');
     setV('dir-chofer',d.chofer||''); setV('dir-cargador',d.cargador||'');
     setV('dir-turno',d.turno||'Mañana'); setV('dir-residuo',d.residuo||'Comercial');
+    setV('dir-frecuencia',d.frecuencia||'');
     setV('dir-parada',d.parada||5); setV('dir-m3',d.m3||0); setV('dir-orden',d.orden||999);
   } else {
     ['dir-cliente','dir-direccion','dir-matricula','dir-chofer','dir-cargador'].forEach(x=>setV(x,''));
     setV('dir-vehiculo','Furgón'); setV('dir-turno','Mañana'); setV('dir-residuo','Comercial');
+    setV('dir-frecuencia','');
     setV('dir-parada',5); setV('dir-m3',0); setV('dir-orden',direcciones.length+1);
   }
   openModal('modal-dir');
@@ -470,7 +472,7 @@ window.saveDireccion = async () => {
   const btn = document.querySelector('#modal-dir .btn-primary');
   btn.textContent='Geocodificando...'; btn.disabled=true;
   const coords = await geocode(dirTxt);
-  btn.textContent='Guardar'; btn.disabled=false;
+  btn.textContent='Reoptimizando ruta...'; 
   const editId = gV('dir-edit-id');
   const id = editId || `d_${Date.now()}`;
   const obj = {
@@ -480,11 +482,17 @@ window.saveDireccion = async () => {
     turno:gV('dir-turno'), residuo:gV('dir-residuo'),
     parada:parseInt(gV('dir-parada'))||5,
     m3:parseFloat(gV('dir-m3'))||0,
-    orden:parseInt(gV('dir-orden'))||999,
+    orden:999, // temporary — will be updated by reoptimize
     lat:coords?.lat||null, lng:coords?.lng||null,
+    frecuencia: gV('dir-frecuencia')||'',
     createdAt: editId ? (direcciones.find(x=>x.id===editId)?.createdAt||Date.now()) : Date.now()
   };
   await db.collection('direcciones').doc(id).set(obj);
+
+  // Reoptimize the route order
+  await reoptimizarRuta(rutaId);
+
+  btn.textContent='Guardar'; btn.disabled=false;
   closeModal('modal-dir');
   checkAlerts(rutaId);
 };
@@ -492,8 +500,39 @@ window.saveDireccion = async () => {
 window.editDireccion = id => window.openDireccionModal(id);
 window.deleteDireccion = async id => {
   if (!confirm('¿Eliminar esta dirección?')) return;
+  const d = direcciones.find(x=>x.id===id);
+  const rutaId = d?.rutaId;
   await db.collection('direcciones').doc(id).delete();
+  // Reoptimize after deletion too
+  if (rutaId) await reoptimizarRuta(rutaId);
 };
+
+// Reoptimize all stops in a route using nearest-neighbor from plant
+async function reoptimizarRuta(rutaId) {
+  // Get current stops for this route (including any just saved, from local state)
+  // We need to re-fetch since Firestore listener may not have updated yet
+  const snap = await db.collection('direcciones').where('rutaId','==',rutaId).get();
+  const stops = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+  if (stops.length === 0) return;
+
+  // Separate stops with and without coordinates
+  const withCoords  = stops.filter(s => s.lat && s.lng);
+  const noCoords    = stops.filter(s => !s.lat || !s.lng);
+
+  // Sort with-coords stops using nearest-neighbor from plant
+  const sorted = nearestNeighborSort(withCoords.map(s => ({ ...s })));
+
+  // Append no-coords stops at the end (can't optimize without location)
+  const finalOrder = [...sorted, ...noCoords];
+
+  // Write updated orden back to Firestore in batch
+  const batch = db.batch();
+  finalOrder.forEach((s, i) => {
+    batch.update(db.collection('direcciones').doc(s.id), { orden: i + 1 });
+  });
+  await batch.commit();
+}
 
 function checkAlerts(rutaId) {
   const ruta = rutas.find(r=>r.id===rutaId);
@@ -632,6 +671,7 @@ function renderRutas() {
           <span style="font-size:11px;background:var(--slate-100);padding:1px 6px;border-radius:10px;color:var(--slate-500)">${r.vehiculo}</span>
         </div>
         <div class="flex-gap">
+          <button class="btn btn-sm btn-secondary" onclick="reoptimizarRutaManual('${r.id}')" title="Reordenar paradas por cercanía desde la planta">🔄 Reoptimizar</button>
           <button class="btn btn-sm btn-secondary" onclick="editRuta('${r.id}')">✏</button>
           <button class="btn btn-sm btn-danger" onclick="deleteRuta('${r.id}')">🗑</button>
         </div>
@@ -681,6 +721,14 @@ window.saveRuta = async () => {
 };
 
 window.editRuta = id => window.openRutaModal(id);
+
+window.reoptimizarRutaManual = async id => {
+  const r = rutas.find(x=>x.id===id);
+  if (!confirm(`¿Reoptimizar el orden de paradas de "${r?.nombre}" partiendo desde la planta?\n\nEsto reorganiza todas las paradas en el orden más eficiente.`)) return;
+  await reoptimizarRuta(id);
+  alert(`✅ Ruta "${r?.nombre}" reoptimizada correctamente.`);
+  renderRutas();
+};
 window.deleteRuta = async id => {
   const r = rutas.find(x=>x.id===id);
   const hasDirs = direcciones.some(d=>d.rutaId===id);
@@ -1646,6 +1694,17 @@ tr:hover td{background:var(--slate-100);}
         <select class="form-select" id="dir-turno"><option>Mañana</option><option>Tarde</option><option>Noche</option></select></div>
       <div class="form-group"><label class="form-label">Tipo de Residuo</label>
         <select class="form-select" id="dir-residuo"><option>Comercial</option><option>Hospitalario</option><option>Industrial</option><option>Reciclados</option><option>Especial</option></select></div>
+      <div class="form-group"><label class="form-label">Frecuencia</label>
+        <select class="form-select" id="dir-frecuencia">
+          <option value="">— Seleccionar —</option>
+          <option>Todos los días</option><option>Lunes a Viernes</option>
+          <option>Lunes Miércoles y Viernes</option><option>Martes y Jueves</option>
+          <option>Lunes y Viernes</option><option>Solo los lunes</option>
+          <option>Solo los martes</option><option>Solo los miércoles</option>
+          <option>Solo los jueves</option><option>Solo los viernes</option>
+          <option>3 veces por semana</option><option>2 veces por semana</option>
+          <option>Semanal</option><option>Quincenal</option><option>Mensual</option>
+        </select></div>
       <div class="form-group"><label class="form-label">m³ promedio mensual</label><input class="form-input" id="dir-m3" type="number" value="0" min="0" step="0.1"></div>
       <div class="form-group"><label class="form-label">Máx. Parada (min)</label><input class="form-input" id="dir-parada" type="number" value="5" min="1"></div>
       <div class="form-group"><label class="form-label">Orden en ruta</label><input class="form-input" id="dir-orden" type="number" value="999" min="1"></div>
