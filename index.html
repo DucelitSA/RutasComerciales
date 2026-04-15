@@ -7,12 +7,13 @@
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<!-- Firebase -->
-<script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, updatePassword, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, collection, doc, getDocs, setDoc, deleteDoc, onSnapshot, query, orderBy, writeBatch, getDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-
+<!-- Firebase compat (funciona sin servidor, sin type=module) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<!-- SheetJS para exportar Excel -->
+<script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+<script>
 const firebaseConfig = {
   apiKey: "AIzaSyBO8R0z2_7MpW-mZcTsrmAk4RB-d3o5GAM",
   authDomain: "rutas-comerciales-93e3f.firebaseapp.com",
@@ -21,10 +22,9 @@ const firebaseConfig = {
   messagingSenderId: "1064735256991",
   appId: "1:1064735256991:web:3167a3e1108d616c26cdaa"
 };
-
-const app  = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db   = getFirestore(app);
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db   = firebase.firestore();
 
 // ═══════════════════════════════════════════════
 //  CONSTANTS
@@ -34,22 +34,7 @@ const MAX_HRS    = 6;
 const CAP_FURGO  = 30;
 const CAP_PRENSA = 90;
 
-const RUTAS_DEFAULT = [
-  { id:'r01', nombre:'COMCAR',    tipo:'Comercial',    color:'#2d6a2d', activa:true, vehiculo:'Furgón'  },
-  { id:'r02', nombre:'RUTA 11',   tipo:'Comercial',    color:'#e53935', activa:true, vehiculo:'Furgón'  },
-  { id:'r03', nombre:'RUTA 12',   tipo:'Comercial',    color:'#1565c0', activa:true, vehiculo:'Prensa'  },
-  { id:'r04', nombre:'RUTA 14',   tipo:'Comercial',    color:'#f57c00', activa:true, vehiculo:'Prensa'  },
-  { id:'r05', nombre:'RUTA 16',   tipo:'Comercial',    color:'#6a1b9a', activa:true, vehiculo:'Furgón'  },
-  { id:'r06', nombre:'RUTA 54',   tipo:'Comercial',    color:'#00838f', activa:true, vehiculo:'Prensa'  },
-  { id:'r07', nombre:'RUTA 56',   tipo:'Comercial',    color:'#ad1457', activa:true, vehiculo:'Prensa'  },
-  { id:'r08', nombre:'RUTA 57',   tipo:'Comercial',    color:'#558b2f', activa:true, vehiculo:'Prensa'  },
-  { id:'r09', nombre:'RUTA 59',   tipo:'Comercial',    color:'#4e342e', activa:true, vehiculo:'Prensa'  },
-  { id:'r10', nombre:'RUTA Nº10', tipo:'Reciclados',   color:'#37474f', activa:true, vehiculo:'Furgón'  },
-  { id:'r11', nombre:'RUTA Nº15', tipo:'Comercial',    color:'#0277bd', activa:true, vehiculo:'Prensa'  },
-  { id:'r12', nombre:'RUTA Nº58', tipo:'Hospitalaria', color:'#c62828', activa:true, vehiculo:'Furgón'  },
-  { id:'r13', nombre:'RUTA Nº60', tipo:'Industrial',   color:'#f9a825', activa:true, vehiculo:'Prensa'  },
-  { id:'r14', nombre:'RUTA Nº9',  tipo:'Comercial',    color:'#283593', activa:true, vehiculo:'Prensa'  },
-];
+const RUTAS_DEFAULT = [];  // Sin rutas pre-cargadas — el usuario las crea desde cero
 
 // ═══════════════════════════════════════════════
 //  STATE
@@ -71,8 +56,8 @@ let importRows   = [];
 onAuthStateChanged(auth, async user => {
   if (user) {
     currentUser = user;
-    const snap = await getDoc(doc(db, 'usuarios', user.uid));
-    currentRole = snap.exists() ? (snap.data().rol || 'operador') : 'operador';
+    const snap = await db.collection('usuarios').doc(user.uid).get();
+    currentRole = snap.exists ? (snap.data().rol || 'operador') : 'operador';
     showApp();
     await seedRutas();
     listenData();
@@ -83,25 +68,25 @@ onAuthStateChanged(auth, async user => {
 });
 
 async function seedRutas() {
-  const snap = await getDocs(collection(db, 'rutas'));
+  const snap = await db.collection('rutas').get();
   if (snap.empty) {
-    const batch = writeBatch(db);
-    RUTAS_DEFAULT.forEach(r => batch.set(doc(db, 'rutas', r.id), r));
+    const batch = db.batch();
+    RUTAS_DEFAULT.forEach(r => batch.set(db.collection('rutas').doc(r.id), r));
     await batch.commit();
   }
 }
 
 function listenData() {
-  onSnapshot(collection(db, 'rutas'), snap => {
+  db.collection('rutas').onSnapshot(snap => {
     rutas = snap.docs.map(d => ({ ...d.data(), id: d.id }));
     rutas.sort((a,b) => a.nombre.localeCompare(b.nombre));
     refreshUI();
   });
-  onSnapshot(collection(db, 'direcciones'), snap => {
+  db.collection('direcciones').onSnapshot(snap => {
     direcciones = snap.docs.map(d => ({ ...d.data(), id: d.id }));
     refreshUI();
   });
-  onSnapshot(collection(db, 'temporales'), snap => {
+  db.collection('temporales').onSnapshot(snap => {
     temporales = snap.docs.map(d => ({ ...d.data(), id: d.id }));
     refreshUI();
   });
@@ -126,12 +111,12 @@ window.doLogin = async () => {
   const email = document.getElementById('login-user').value.trim();
   const pass  = document.getElementById('login-pass').value;
   try {
-    await signInWithEmailAndPassword(auth, email, pass);
+    await auth.signInWithEmailAndPassword(email, pass);
   } catch(e) {
     document.getElementById('login-error').textContent = 'Usuario o contraseña incorrectos.';
   }
 };
-window.doLogout = () => signOut(auth);
+window.doLogout = () => auth.signOut();
 
 document.getElementById('login-pass').addEventListener('keydown', e => { if(e.key==='Enter') window.doLogin(); });
 document.getElementById('login-user').addEventListener('keydown', e => { if(e.key==='Enter') window.doLogin(); });
@@ -476,7 +461,7 @@ window.saveDireccion = async () => {
     lat:coords?.lat||null, lng:coords?.lng||null,
     createdAt: editId ? (direcciones.find(x=>x.id===editId)?.createdAt||Date.now()) : Date.now()
   };
-  await setDoc(doc(db,'direcciones',id), obj);
+  await db.collection('direcciones').doc(id).set(obj);
   closeModal('modal-dir');
   checkAlerts(rutaId);
 };
@@ -484,7 +469,7 @@ window.saveDireccion = async () => {
 window.editDireccion = id => window.openDireccionModal(id);
 window.deleteDireccion = async id => {
   if (!confirm('¿Eliminar esta dirección?')) return;
-  await deleteDoc(doc(db,'direcciones',id));
+  await db.collection('direcciones').doc(id).delete();
 };
 
 function checkAlerts(rutaId) {
@@ -551,7 +536,7 @@ window.saveTemporal = async () => {
   const coords = await geocode(dir);
   btn.textContent='Guardar'; btn.disabled=false;
   const id = `t_${Date.now()}`;
-  await setDoc(doc(db,'temporales',id), {
+  await db.collection('temporales').doc(id).set({
     rutaId, cliente, direccion:dir,
     fecha: gV('temp-fecha'),
     frecuencia: gV('temp-frecuencia'),
@@ -576,10 +561,10 @@ window.completarTemporal = async id => {
     nextFecha = d.toISOString().split('T')[0];
   }
   if (nextFecha) {
-    await setDoc(doc(db,'temporales',id), {...t, fecha:nextFecha, estado:'pendiente'});
+    await db.collection('temporales').doc(id).set({...t, fecha:nextFecha, estado:'pendiente'});
     alert(`✅ Completada. Próxima fecha: ${nextFecha}`);
   } else {
-    await setDoc(doc(db,'temporales',id), {...t, estado:'completada'});
+    await db.collection('temporales').doc(id).set({...t, estado:'completada'});
   }
 };
 
@@ -587,20 +572,20 @@ window.convertirPermanente = async id => {
   const t = temporales.find(x=>x.id===id);
   if (!t || !confirm(`¿Fijar "${t.cliente}" como cliente permanente en la ruta?`)) return;
   const did = `d_${Date.now()}`;
-  await setDoc(doc(db,'direcciones',did), {
+  await db.collection('direcciones').doc(did).set({
     rutaId:t.rutaId, cliente:t.cliente, direccion:t.direccion,
     vehiculo:'Furgón', matricula:'', chofer:'', cargador:'',
     turno:'Mañana', residuo:'Comercial', parada:5, m3:0,
     orden:direcciones.filter(d=>d.rutaId===t.rutaId).length+1,
     lat:t.lat||null, lng:t.lng||null, createdAt:Date.now()
   });
-  await deleteDoc(doc(db,'temporales',id));
-  alert('✅ Cliente fijado como permanente. Podés editar sus datos en la solapa Direcciones.');
+  await db.collection('temporales').doc(id).delete();
+  alert('✅ Cliente fijado como permanente.');
 };
 
 window.deleteTemporal = async id => {
   if (!confirm('¿Eliminar esta parada temporal?')) return;
-  await deleteDoc(doc(db,'temporales',id));
+  await db.collection('temporales').doc(id).delete();
 };
 
 // ═══════════════════════════════════════════════
@@ -665,7 +650,7 @@ window.saveRuta = async () => {
   if (!nombre) { alert('El nombre es obligatorio.'); return; }
   const editId = gV('ruta-edit-id');
   const id = editId || `r_${Date.now()}`;
-  await setDoc(doc(db,'rutas',id), {
+  await db.collection('rutas').doc(id).set({
     nombre, tipo:gV('ruta-tipo'), color:gV('ruta-color'),
     vehiculo:gV('ruta-vehiculo'), activa:gV('ruta-activa')==='SI'
   });
@@ -678,7 +663,7 @@ window.deleteRuta = async id => {
   const hasDirs = direcciones.some(d=>d.rutaId===id);
   if (hasDirs && !confirm(`La ruta "${r?.nombre}" tiene clientes. ¿Eliminar igual?`)) return;
   if (!hasDirs && !confirm(`¿Eliminar "${r?.nombre}"?`)) return;
-  await deleteDoc(doc(db,'rutas',id));
+  await db.collection('rutas').doc(id).delete();
 };
 
 // ═══════════════════════════════════════════════
@@ -696,20 +681,55 @@ window.previewImport = input => {
   if (!file) return;
   document.getElementById('import-filename').textContent = file.name;
   const reader = new FileReader();
+  const isExcel = file.name.match(/\.xlsx?$/i);
+
   reader.onload = e => {
-    importRows = parseCSV(e.target.result);
+    if (isExcel) {
+      // Parse Excel with SheetJS
+      const wb_in = XLSX.read(e.target.result, {type:'array'});
+      const ws_in = wb_in.Sheets[wb_in.SheetNames[0]];
+      // Find header row (look for 'nombre' column)
+      const raw = XLSX.utils.sheet_to_json(ws_in, {header:1, defval:''});
+      let headerRow = -1;
+      for (let i=0;i<raw.length;i++) {
+        const rowLower = raw[i].map(c=>String(c).toLowerCase().trim());
+        if (rowLower.includes('nombre') || rowLower.includes('direccion')) { headerRow=i; break; }
+      }
+      if (headerRow < 0) { alert('No se encontraron encabezados válidos. Verificá que el archivo tenga columnas "nombre" y "direccion".'); return; }
+      const headers = raw[headerRow].map(c=>String(c).toLowerCase().trim().replace(/[*\s]/g,'_').replace(/__+/g,'_').replace(/_$/,''));
+      importRows = raw.slice(headerRow+1)
+        .filter(row => row.some(c=>c!==''))
+        .map(row => {
+          const obj = {};
+          headers.forEach((h,i) => { obj[h] = String(row[i]||'').trim(); });
+          return obj;
+        })
+        .filter(r => r.nombre || r.cliente || r.direccion);
+    } else {
+      importRows = parseCSV(e.target.result);
+    }
+
     document.getElementById('import-preview-title').textContent = `${importRows.length} registros encontrados:`;
     document.getElementById('import-count-btn').textContent = `(${importRows.length})`;
-    const cols = ['nombre','direccion','residuo','m3','frecuencia'];
+    const cols = ['nombre','direccion','m3_promedio','frecuencia','tipo_residuo'];
     document.getElementById('import-preview-head').innerHTML = cols.map(c=>`<th>${c}</th>`).join('');
-    document.getElementById('import-preview-body').innerHTML = importRows.slice(0,8).map(r=>
-      `<tr>${cols.map(c=>`<td>${r[c]||'—'}</td>`).join('')}</tr>`
-    ).join('');
+    document.getElementById('import-preview-body').innerHTML = importRows.slice(0,8).map(r=>{
+      const m3 = r.m3_promedio || r.m3 || '—';
+      const freq = r.frecuencia || '—';
+      const res = r.tipo_residuo || r.residuo || '—';
+      return `<tr>
+        <td>${r.nombre||r.cliente||'—'}</td>
+        <td style="font-size:11px">${r.direccion||'—'}</td>
+        <td>${m3}</td><td>${freq}</td><td>${res}</td>
+      </tr>`;
+    }).join('');
     document.getElementById('import-preview').style.display='';
     document.getElementById('import-result').innerHTML='';
     renderImportar();
   };
-  reader.readAsText(file,'UTF-8');
+
+  if (isExcel) reader.readAsArrayBuffer(file);
+  else reader.readAsText(file,'UTF-8');
 };
 
 // K-Means clustering
@@ -774,9 +794,13 @@ window.ejecutarImport = async () => {
   for (const row of importRows) {
     const nombre = (row.nombre||row.cliente||'').trim();
     const dir    = (row.direccion||'').trim();
+    const m3Val  = parseFloat(row.m3_promedio||row.m3||0) || 0;
+    const residuo = row.tipo_residuo||row.residuo||row.tipo||'Comercial';
+    const frecuencia = row.frecuencia||row.frecuencia_visita||'';
+    const vehiculoPref = row.vehiculo_pref||row.vehiculo||'';
     if (!nombre||!dir) continue;
     const coords = await geocode(dir);
-    geocoded.push({ ...row, nombre, dir, lat:coords?.lat||null, lng:coords?.lng||null });
+    geocoded.push({ ...row, nombre, dir, m3:m3Val, residuo, frecuencia, vehiculoPref, lat:coords?.lat||null, lng:coords?.lng||null });
     await new Promise(r=>setTimeout(r,250));
   }
 
@@ -836,7 +860,7 @@ window.ejecutarImport = async () => {
   });
 
   // Step 4: write to Firestore
-  const batch = writeBatch(db);
+  const batch = db.batch();
   let ok=0, skip=0, alerts=[];
   Object.entries(byRuta).forEach(([rid,list]) => {
     const baseOrden = direcciones.filter(d=>d.rutaId===rid).length;
@@ -848,12 +872,16 @@ window.ejecutarImport = async () => {
       m3acc+=m3v;
       if (m3acc>cap) alerts.push(`⚠ "${g.nombre}": supera capacidad de ${ruta?.nombre} (${m3acc.toFixed(1)}/${cap}m³)`);
       const id = `d_${Date.now()}_${Math.random().toString(36).slice(2,6)}`;
-      batch.set(doc(db,'direcciones',id), {
+      batch.set(db.collection('direcciones').doc(id), {
         rutaId:rid, cliente:g.nombre, direccion:g.dir,
-        vehiculo:ruta?.vehiculo||'Furgón', matricula:'', chofer:'', cargador:'',
-        turno:'Mañana', residuo:capitalize(g.residuo||'Comercial'),
-        frecuencia:g.frecuencia||'',
-        parada:5, m3:m3v, orden:baseOrden+i+1,
+        vehiculo: g.vehiculoPref && g.vehiculoPref !== 'Auto-asignar' ? g.vehiculoPref : (ruta?.vehiculo||'Furgón'),
+        matricula: g.matricula||'', chofer: g.chofer||'', cargador: g.cargador||'',
+        turno: g.turno||'Mañana',
+        residuo: capitalize(g.residuo||'Comercial'),
+        frecuencia: g.frecuencia||'',
+        parada: parseInt(g.parada_max_min||g.parada||5)||5,
+        m3: parseFloat(g.m3)||0,
+        orden: baseOrden+i+1,
         lat:g.lat||null, lng:g.lng||null, createdAt:Date.now()
       });
       ok++;
@@ -907,31 +935,102 @@ function getExportData() {
 }
 
 window.exportarCSV = () => {
-  const data=getExportData();
-  const headers=['Ruta','Orden','Cliente','Dirección','Vehículo','Matrícula','Chofer','Cargador','Turno','Tipo Residuo','m³','Máx.Parada(min)'];
-  const rows=data.map(d=>{
-    const r=rutas.find(x=>x.id===d.rutaId);
-    return [r?.nombre||'—',d.orden||'—',d.cliente,d.direccion,d.vehiculo||'—',
-            d.matricula||'—',d.chofer||'—',d.cargador||'—',d.turno||'—',d.residuo||'—',d.m3||0,d.parada||5]
+  const data = getExportData();
+  const headers = ['Ruta','Orden','Cliente','Dirección','Frecuencia','Vehículo','Matrícula','Chofer','Cargador','Turno','Tipo Residuo','m³/visita','Máx.Parada(min)'];
+  const rows = data.map(d => {
+    const r = rutas.find(x=>x.id===d.rutaId);
+    return [r?.nombre||'—', d.orden||'—', d.cliente, d.direccion, d.frecuencia||'—',
+            d.vehiculo||'—', d.matricula||'—', d.chofer||'—', d.cargador||'—',
+            d.turno||'—', d.residuo||'—', d.m3||0, d.parada||5]
       .map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',');
   });
-  const csv=[headers.join(','),...rows].join('\n');
-  const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement('a');a.href=url;a.download='rutas_aborgama.csv';a.click();
+  const csv = [headers.join(','), ...rows].join('\n');
+  const blob = new Blob(['\ufeff'+csv], {type:'text/csv;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href=url; a.download='rutas_aborgama.csv'; a.click();
   URL.revokeObjectURL(url);
 };
 
+window.exportarExcel = () => {
+  const data = getExportData();
+  if (!data.length) { alert('No hay datos para exportar.'); return; }
+
+  // Build worksheet data
+  const wsData = [
+    // Title row
+    ['ABORGAMA — Rutas de Recolección', '', '', '', '', '', '', '', '', '', '', '', ''],
+    [`Generado: ${new Date().toLocaleString('es-UY')}`, '', '', '', '', '', '', '', '', '', '', '', ''],
+    [],
+    // Headers
+    ['Ruta','Orden','Cliente','Dirección','Frecuencia','Vehículo','Matrícula','Chofer','Cargador','Turno','Tipo Residuo','m³/visita','Máx.Parada(min)'],
+  ];
+
+  // Group by ruta with subtotals
+  let currentRuta = null;
+  data.forEach(d => {
+    const r = rutas.find(x=>x.id===d.rutaId);
+    const rutaNombre = r?.nombre || '—';
+    if (rutaNombre !== currentRuta) {
+      if (currentRuta !== null) wsData.push([]); // blank separator
+      currentRuta = rutaNombre;
+    }
+    wsData.push([
+      rutaNombre, d.orden||'', d.cliente, d.direccion, d.frecuencia||'—',
+      d.vehiculo||'—', d.matricula||'—', d.chofer||'—', d.cargador||'—',
+      d.turno||'—', d.residuo||'—', d.m3||0, d.parada||5
+    ]);
+  });
+
+  const wb_xl = XLSX.utils.book_new();
+  const ws_xl = XLSX.utils.aoa_to_sheet(wsData);
+
+  // Column widths
+  ws_xl['!cols'] = [
+    {wch:16},{wch:8},{wch:32},{wch:40},{wch:24},{wch:12},
+    {wch:12},{wch:20},{wch:20},{wch:10},{wch:14},{wch:12},{wch:14}
+  ];
+
+  // Merge title cells
+  ws_xl['!merges'] = [
+    {s:{r:0,c:0}, e:{r:0,c:12}},
+    {s:{r:1,c:0}, e:{r:1,c:12}},
+  ];
+
+  XLSX.utils.book_append_sheet(wb_xl, ws_xl, 'Rutas');
+
+  // Also add a summary sheet per ruta
+  const summaryData = [['Ruta','Vehículo','Tipo','Paradas','m³ Total','Tiempo Est. (h)','% Capacidad']];
+  rutas.forEach(r => {
+    const dirs = direcciones.filter(d=>d.rutaId===r.id);
+    const count = dirs.length;
+    const m3total = dirs.reduce((s,d)=>s+(parseFloat(d.m3)||0),0);
+    const cap = r.vehiculo==='Prensa' ? CAP_PRENSA : CAP_FURGO;
+    const hrs = estimateHours(r.id);
+    summaryData.push([
+      r.nombre, r.vehiculo, r.tipo, count,
+      Math.round(m3total*10)/10, Math.round(hrs*10)/10,
+      Math.round(m3total/cap*100)+'%'
+    ]);
+  });
+  const ws_sum = XLSX.utils.aoa_to_sheet(summaryData);
+  ws_sum['!cols'] = [{wch:16},{wch:12},{wch:14},{wch:10},{wch:12},{wch:16},{wch:14}];
+  XLSX.utils.book_append_sheet(wb_xl, ws_sum, 'Resumen por Ruta');
+
+  XLSX.writeFile(wb_xl, 'rutas_aborgama.xlsx');
+};
+
 window.exportarHTML = () => {
-  const data=getExportData();
-  const rows=data.map(d=>{
-    const r=rutas.find(x=>x.id===d.rutaId);
-    return `<tr><td>${r?.nombre||'—'}</td><td>${d.orden||'—'}</td><td><b>${d.cliente}</b></td>
-    <td>${d.direccion}</td><td>${d.vehiculo||'—'}</td><td>${d.matricula||'—'}</td>
-    <td>${d.chofer||'—'}</td><td>${d.cargador||'—'}</td><td>${d.turno||'—'}</td>
-    <td>${d.residuo||'—'}</td><td>${d.m3||0}m³</td><td>${d.parada||5}min</td></tr>`;
+  const data = getExportData();
+  const rows = data.map(d => {
+    const r = rutas.find(x=>x.id===d.rutaId);
+    return `<tr>
+      <td>${r?.nombre||'—'}</td><td>${d.orden||'—'}</td><td><b>${d.cliente}</b></td>
+      <td>${d.direccion}</td><td>${d.frecuencia||'—'}</td><td>${d.vehiculo||'—'}</td>
+      <td>${d.matricula||'—'}</td><td>${d.chofer||'—'}</td><td>${d.cargador||'—'}</td>
+      <td>${d.turno||'—'}</td><td>${d.residuo||'—'}</td><td>${d.m3||0}m³</td><td>${d.parada||5}min</td>
+    </tr>`;
   }).join('');
-  const w=window.open('','_blank');
+  const w = window.open('','_blank');
   w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Rutas Aborgama</title>
   <style>body{font-family:Arial,sans-serif;padding:20px}h1{color:#1e4620}
   table{width:100%;border-collapse:collapse;font-size:11px}
@@ -942,7 +1041,7 @@ window.exportarHTML = () => {
   <body><h1>🌿 Aborgama — Rutas de Recolección</h1>
   <p style="color:#64748b;font-size:13px">Generado: ${new Date().toLocaleString('es-UY')}</p>
   <table><thead><tr><th>Ruta</th><th>Orden</th><th>Cliente</th><th>Dirección</th>
-  <th>Vehículo</th><th>Matrícula</th><th>Chofer</th><th>Cargador</th>
+  <th>Frecuencia</th><th>Vehículo</th><th>Matrícula</th><th>Chofer</th><th>Cargador</th>
   <th>Turno</th><th>Residuo</th><th>m³</th><th>Máx.Parada</th></tr></thead>
   <tbody>${rows}</tbody></table>
   <button onclick="window.print()" style="margin-top:16px;padding:8px 20px;background:#1e4620;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:14px">🖨 Imprimir</button>
@@ -954,7 +1053,7 @@ window.exportarHTML = () => {
 //  USUARIOS
 // ═══════════════════════════════════════════════
 async function renderUsuarios() {
-  const snap = await getDocs(collection(db,'usuarios'));
+  const snap = await db.collection('usuarios').get();
   const usersData = snap.docs.map(d=>({id:d.id,...d.data()}));
   const tbody=document.getElementById('tbody-usuarios');
   if(!tbody) return;
@@ -971,20 +1070,14 @@ async function renderUsuarios() {
   }).join('');
 }
 
-window.openUsuarioModal = () => {
-  ['usr-email','usr-pass'].forEach(x=>setV(x,''));
-  setV('usr-rol','operador');
-  openModal('modal-usuario');
-};
-
 window.saveUsuario = async () => {
   const email=gV('usr-email').trim();
   const pass=gV('usr-pass');
   const rol=gV('usr-rol');
   if(!email||!pass){alert('Email y contraseña son obligatorios.');return;}
   try {
-    const cred=await createUserWithEmailAndPassword(auth,email,pass);
-    await setDoc(doc(db,'usuarios',cred.user.uid),{email,rol,createdAt:Date.now()});
+    const cred=await auth.createUserWithEmailAndPassword(email,pass);
+    await db.collection('usuarios').doc(cred.user.uid).set({email,rol,createdAt:Date.now()});
     closeModal('modal-usuario');
     renderUsuarios();
   } catch(e){alert('Error: '+e.message);}
@@ -992,7 +1085,7 @@ window.saveUsuario = async () => {
 
 window.deleteUsuario = async id => {
   if(!confirm('¿Eliminar este usuario?'))return;
-  await deleteDoc(doc(db,'usuarios',id));
+  await db.collection('usuarios').doc(id).delete();
   renderUsuarios();
 };
 
@@ -1009,8 +1102,8 @@ window.openCambiarClave = () => {
 window.openCambiarClaveUsuario = async id => {
   setV('clave-target-id',id);
   const isSelf=id===currentUser.uid;
-  const snap=await getDoc(doc(db,'usuarios',id));
-  const email=snap.exists()?snap.data().email:id;
+  const snap=await db.collection('usuarios').doc(id).get();
+  const email=snap.exists?snap.data().email:id;
   document.getElementById('clave-modal-title').textContent=isSelf?'Cambiar mi contraseña':`Cambiar clave de ${email}`;
   document.getElementById('clave-actual-group').style.display=isSelf?'':'none';
   ['clave-actual','clave-nueva','clave-confirmar'].forEach(x=>setV(x,''));
@@ -1025,7 +1118,7 @@ window.saveClave = async () => {
   if(!nueva||nueva.length<6){errEl.textContent='Mínimo 6 caracteres.';return;}
   if(nueva!==conf){errEl.textContent='Las contraseñas no coinciden.';return;}
   try {
-    await updatePassword(auth.currentUser,nueva);
+    await auth.currentUser.updatePassword(nueva);
     closeModal('modal-clave');
     alert('✅ Contraseña actualizada.');
   } catch(e){errEl.textContent='Error: '+e.message;}
@@ -1364,8 +1457,8 @@ tr:hover td{background:var(--slate-100);}
           <div class="card-header"><div class="card-title">📂 Cargar archivo</div></div>
           <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
             <label style="cursor:pointer">
-              <input type="file" id="import-file" accept=".csv,.txt" style="display:none" onchange="previewImport(this)">
-              <div class="btn btn-secondary">📂 Seleccionar CSV</div>
+              <input type="file" id="import-file" accept=".csv,.txt,.xlsx,.xls" style="display:none" onchange="previewImport(this)">
+              <div class="btn btn-secondary">📂 Seleccionar archivo (CSV o Excel)</div>
             </label>
             <span id="import-filename" style="font-size:13px;color:var(--slate-500)">Ningún archivo seleccionado</span>
           </div>
@@ -1400,10 +1493,11 @@ tr:hover td{background:var(--slate-100);}
             </select>
           </div>
           <div class="flex-gap">
-            <button class="btn btn-primary" onclick="exportarCSV()">⬇ Exportar CSV</button>
-            <button class="btn btn-secondary" onclick="exportarHTML()">🖨 Exportar para imprimir</button>
+            <button class="btn btn-primary" onclick="exportarExcel()">📊 Exportar Excel</button>
+            <button class="btn btn-secondary" onclick="exportarCSV()">⬇ Exportar CSV</button>
+            <button class="btn btn-secondary" onclick="exportarHTML()">🖨 Imprimir</button>
           </div>
-          <p class="form-hint mt-2">Ordenado por punto de recolección (orden de ruta), no por fecha de alta ni alfabéticamente.</p>
+          <p class="form-hint mt-2">Excel incluye hoja de detalle + hoja de resumen por ruta. Ordenado por punto de recolección.</p>
         </div>
         <div class="card" style="margin-top:14px">
           <div class="card-header"><div class="card-title">Alertas activas</div></div>
