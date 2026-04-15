@@ -666,6 +666,71 @@ window.deleteRuta = async id => {
 // ═══════════════════════════════════════════════
 //  IMPORTAR + K-MEANS
 // ═══════════════════════════════════════════════
+window.descargarTemplate = () => {
+  const wb_t = XLSX.utils.book_new();
+
+  // Sheet 1: Clientes
+  const data = [
+    ['nombre *','direccion *','m3_promedio *','frecuencia *','tipo_residuo','vehiculo_pref','chofer','cargador','matricula','turno','parada_max_min','notas'],
+    ['Empresa ABC S.A.','Av. 18 de Julio 1234, Montevideo','3.5','Lunes a Viernes','Comercial','Prensa','Juan Pérez','Carlos García','STP-1234','Mañana','5','Ejemplo - borrá esta fila'],
+    ['Hospital Clínico','Bulevar España 2827, Montevideo','8.0','Lunes Miércoles y Viernes','Hospitalario','Furgón','Ana Rodríguez','Luis Méndez','STO-5678','Mañana','10','Ejemplo - borrá esta fila'],
+    ['Supermercado Central','Av. Luis Batlle Berres 3450, Montevideo','12.0','3 veces por semana','Comercial','Prensa','','','','Tarde','5','Ejemplo - borrá esta fila'],
+    ['Taller Metalúrgico','Camino Maldonado 4521, Montevideo','6.5','Solo lunes y viernes','Industrial','Auto-asignar','','','','Mañana','5','Ejemplo - borrá esta fila'],
+  ];
+  const ws_t = XLSX.utils.aoa_to_sheet(data);
+  ws_t['!cols'] = [{wch:30},{wch:42},{wch:14},{wch:28},{wch:16},{wch:14},{wch:18},{wch:18},{wch:12},{wch:10},{wch:14},{wch:24}];
+  XLSX.utils.book_append_sheet(wb_t, ws_t, 'Clientes');
+
+  // Sheet 2: Frecuencias válidas
+  const freqs = [
+    ['Frecuencia (copiar exacto)','Descripción','Visitas/semana aprox.'],
+    ['Todos los días','Lu Ma Mi Ju Vi Sa Do','7'],
+    ['Lunes a Viernes','Lu Ma Mi Ju Vi','5'],
+    ['Lunes Miércoles y Viernes','Lu Mi Vi','3'],
+    ['Martes y Jueves','Ma Ju','2'],
+    ['Lunes y Viernes','Lu Vi','2'],
+    ['Solo los lunes','Lunes','1'],
+    ['Solo los martes','Martes','1'],
+    ['Solo los miércoles','Miércoles','1'],
+    ['Solo los jueves','Jueves','1'],
+    ['Solo los viernes','Viernes','1'],
+    ['3 veces por semana','Días a definir','3'],
+    ['2 veces por semana','Días a definir','2'],
+    ['Semanal','Un día fijo por semana','1'],
+    ['Quincenal','Cada 2 semanas','0.5'],
+    ['Mensual','Una vez al mes','0.25'],
+  ];
+  const ws_f = XLSX.utils.aoa_to_sheet(freqs);
+  ws_f['!cols'] = [{wch:32},{wch:30},{wch:20}];
+  XLSX.utils.book_append_sheet(wb_t, ws_f, 'Frecuencias válidas');
+
+  // Sheet 3: Instrucciones
+  const inst = [
+    ['Campo','Descripción'],
+    ['nombre *','Nombre del cliente o empresa. Obligatorio.'],
+    ['direccion *','Dirección completa: Calle + número + ciudad. Ej: "Av. 18 de Julio 1234, Montevideo". Obligatorio.'],
+    ['m3_promedio *','Metros cúbicos POR VISITA (no mensual). Si genera 10m³/mes y va 5 veces/semana (20 visitas/mes) → 10/20 = 0.5. Obligatorio.'],
+    ['frecuencia *','Copiá exactamente una opción de la hoja "Frecuencias válidas". Obligatorio.'],
+    ['tipo_residuo','Comercial / Hospitalario / Industrial / Reciclados / Especial. Si se omite se asume Comercial.'],
+    ['vehiculo_pref','Furgón (máx 30m³) / Prensa (máx 90m³) / Auto-asignar. Si se omite se usa Auto-asignar.'],
+    ['chofer','Nombre del chofer asignado. Opcional.'],
+    ['cargador','Nombre del cargador. Opcional.'],
+    ['matricula','Matrícula del vehículo. Opcional.'],
+    ['turno','Mañana / Tarde / Noche. Si se omite se usa Mañana.'],
+    ['parada_max_min','Minutos máximos de parada por visita. Por defecto: 5.'],
+    ['notas','Observaciones adicionales. Opcional.'],
+    ['',''],
+    ['IMPORTANTE','Borrá las filas de ejemplo antes de importar, o la app las importará también.'],
+    ['IMPORTANTE','Al importar la app geocodifica cada dirección automáticamente para el mapa.'],
+    ['IMPORTANTE','Con K-Means auto la app agrupa los clientes en rutas por zona geográfica respetando capacidad m³.'],
+  ];
+  const ws_i = XLSX.utils.aoa_to_sheet(inst);
+  ws_i['!cols'] = [{wch:18},{wch:80}];
+  XLSX.utils.book_append_sheet(wb_t, ws_i, 'Instrucciones');
+
+  XLSX.writeFile(wb_t, 'Aborgama_Template_Importacion.xlsx');
+};
+
 function renderImportar() {
   const sel = document.getElementById('import-ruta-sel');
   if (!sel) return;
@@ -1443,17 +1508,21 @@ tr:hover td{background:var(--slate-100);}
       <div class="panel" id="panel-importar">
         <div class="panel-header"><div class="panel-title">Importar Clientes</div></div>
         <div class="card">
-          <div class="card-header"><div class="card-title">📋 Formato CSV</div></div>
-          <div style="background:var(--slate-100);border-radius:8px;padding:12px;font-family:'DM Mono',monospace;font-size:12px;color:var(--slate-700);overflow-x:auto">
-            nombre,direccion,residuo,m3,frecuencia<br>
-            Empresa ABC,"Av. 18 de Julio 1234, Montevideo",Comercial,12.5,Semanal<br>
-            Hospital XYZ,"Bulevar España 567",Hospitalario,8,Mensual
+          <div class="card-header">
+            <div class="card-title">📋 Formato del archivo</div>
+            <button class="btn btn-secondary btn-sm" onclick="descargarTemplate()">⬇ Descargar Template Excel</button>
           </div>
-          <p style="font-size:12px;color:var(--slate-500);margin-top:10px">
-            • <b>nombre</b> y <b>direccion</b> obligatorios. <b>residuo</b>, <b>m3</b> y <b>frecuencia</b> opcionales.<br>
-            • Con <b>K-Means auto</b>: agrupa por zona geográfica, respeta capacidad de vehículo y ordena por proximidad.<br>
-            • Furgón: máx <b>30 m³</b> · Prensa: máx <b>90 m³</b> · Máx <b>100 paradas</b> por ruta.
-          </p>
+          <p style="font-size:13px;color:var(--slate-700);margin-bottom:10px">El archivo debe tener estas columnas exactas (los marcados con * son obligatorios):</p>
+          <div style="background:var(--slate-100);border-radius:8px;padding:12px;font-family:'DM Mono',monospace;font-size:11px;color:var(--slate-700);overflow-x:auto;line-height:1.8">
+            <span style="color:var(--red);font-weight:700">nombre*</span> | <span style="color:var(--red);font-weight:700">direccion*</span> | <span style="color:var(--red);font-weight:700">m3_promedio*</span> | <span style="color:var(--red);font-weight:700">frecuencia*</span> | tipo_residuo | vehiculo_pref | chofer | cargador | matricula | turno | parada_max_min | notas
+          </div>
+          <div style="margin-top:10px;font-size:12px;color:var(--slate-500);line-height:1.7">
+            • <b>m3_promedio</b>: metros cúbicos POR VISITA (no mensual)<br>
+            • <b>frecuencia</b>: ej. "Lunes a Viernes", "Lunes Miércoles y Viernes", "3 veces por semana", "Semanal"<br>
+            • <b>vehiculo_pref</b>: Furgón (máx 30m³) / Prensa (máx 90m³) / Auto-asignar<br>
+            • <b>tipo_residuo</b>: Comercial / Hospitalario / Industrial / Reciclados / Especial<br>
+            • Aceptamos <b>.xlsx</b> y <b>.csv</b>. Con K-Means auto la app agrupa por zona geográfica.
+          </div>
         </div>
         <div class="card" style="margin-top:14px">
           <div class="card-header"><div class="card-title">📂 Cargar archivo</div></div>
@@ -1474,7 +1543,7 @@ tr:hover td{background:var(--slate-100);}
               <div class="form-group" style="min-width:260px">
                 <label class="form-label">Asignación de rutas</label>
                 <select class="form-select" id="import-ruta-sel"></select>
-                <span class="form-hint">K-Means agrupa geográficamente considerando m³ y paradas</span>
+                <span class="form-hint">K-Means agrupa geográficamente considerando m³ y capacidad</span>
               </div>
               <button class="btn btn-primary" onclick="ejecutarImport()">⚡ Importar <span id="import-count-btn"></span></button>
             </div>
