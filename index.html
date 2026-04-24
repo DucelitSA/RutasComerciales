@@ -872,7 +872,7 @@ function showPortalScreen() {
   document.getElementById('portal-name').textContent = me.email.split('@')[0];
   // Show/hide modules based on permissions
   const hasRutas  = ['rutas','ambos','master'].includes(myModulos) || myRole==='master';
-  const hasTaller = ['taller','ambos','master'].includes(myModulos) || myRole==='master';
+  const hasTaller = ['taller','taller_jefe','ambos','ambos_jefe','master'].includes(myModulos) || myRole==='master';
   document.getElementById('portal-rutas').classList.toggle('disabled', !hasRutas);
   document.getElementById('portal-taller').classList.toggle('disabled', !hasTaller);
 }
