@@ -2,27 +2,778 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Aborgama — Gestión de Rutas</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Aborgama — Portal</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+/* ═══ DESIGN TOKENS ═══ */
+:root{
+  --g9:#1a3a1a;--g8:#1e4620;--g7:#2d6a2d;--g6:#3a8c3a;--g5:#4caf50;--g4:#6fcf70;--g1:#e8f5e9;--g0:#f1f8f1;
+  --red:#dc2626;--redl:#fef2f2;--amber:#f59e0b;--amberl:#fffbeb;--blue:#1565c0;
+  --s9:#0f172a;--s7:#334155;--s5:#64748b;--s3:#cbd5e1;--s1:#f1f5f9;--s0:#f8fafc;--w:#ffffff;
+  --sh1:0 1px 3px rgba(0,0,0,.08);--sh2:0 4px 16px rgba(0,0,0,.12);--sh3:0 8px 32px rgba(0,0,0,.18);
+  --r:10px;--rl:16px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'DM Sans',sans-serif;background:var(--s1);color:var(--s9);min-height:100vh;}
+img{max-width:100%;}
+
+/* ═══ LOGIN ═══ */
+#screen-login{min-height:100vh;background:linear-gradient(135deg,var(--g9),var(--g7));display:flex;align-items:center;justify-content:center;padding:20px;}
+.login-box{background:var(--w);border-radius:20px;padding:40px 36px;width:100%;max-width:380px;box-shadow:var(--sh3);text-align:center;}
+.login-logo{height:48px;margin-bottom:20px;}
+.login-title{font-size:22px;font-weight:700;color:var(--g8);margin-bottom:4px;}
+.login-sub{font-size:13px;color:var(--s5);margin-bottom:28px;}
+.login-group{margin-bottom:14px;text-align:left;}
+.login-label{font-size:11px;font-weight:700;color:var(--s7);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:5px;}
+.login-input{width:100%;padding:11px 14px;border:1.5px solid var(--s3);border-radius:9px;font-size:14px;font-family:inherit;outline:none;transition:border .2s;}
+.login-input:focus{border-color:var(--g5);}
+.login-btn{width:100%;padding:13px;background:var(--g6);color:#fff;border:none;border-radius:9px;font-size:15px;font-weight:700;font-family:inherit;cursor:pointer;margin-top:8px;transition:background .2s;}
+.login-btn:hover{background:var(--g7);}
+.login-error{font-size:13px;color:var(--red);margin-top:10px;min-height:18px;}
+
+/* ═══ PORTAL SELECTOR ═══ */
+#screen-portal{min-height:100vh;background:linear-gradient(135deg,var(--g9),var(--g7));display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;gap:32px;}
+.portal-header{text-align:center;color:#fff;}
+.portal-header img{height:52px;filter:brightness(10);margin-bottom:12px;}
+.portal-header h1{font-size:24px;font-weight:700;margin-bottom:4px;}
+.portal-header p{font-size:14px;opacity:.7;}
+.portal-cards{display:flex;gap:20px;flex-wrap:wrap;justify-content:center;}
+.portal-card{background:var(--w);border-radius:20px;padding:32px 28px;width:240px;text-align:center;cursor:pointer;transition:all .25s;box-shadow:var(--sh2);border:3px solid transparent;}
+.portal-card:hover{transform:translateY(-6px);box-shadow:var(--sh3);border-color:var(--g4);}
+.portal-card.disabled{opacity:.4;cursor:not-allowed;pointer-events:none;}
+.portal-icon{font-size:56px;margin-bottom:16px;line-height:1;}
+.portal-card h2{font-size:17px;font-weight:700;color:var(--g8);margin-bottom:6px;}
+.portal-card p{font-size:12px;color:var(--s5);}
+.portal-badge{display:inline-block;background:var(--g1);color:var(--g7);font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;margin-top:8px;text-transform:uppercase;letter-spacing:.4px;}
+.portal-logout{color:rgba(255,255,255,.6);font-size:13px;cursor:pointer;text-decoration:underline;}
+.portal-logout:hover{color:#fff;}
+
+/* ═══ APP SHELL ═══ */
+#screen-rutas{display:none;flex-direction:column;height:100vh;overflow:hidden;}
+
+/* TOPBAR */
+.topbar{background:var(--g8);color:#fff;display:flex;align-items:center;gap:12px;padding:0 20px;height:54px;flex-shrink:0;box-shadow:var(--sh2);z-index:200;}
+.topbar-logo{height:28px;filter:brightness(10);}
+.topbar-divider{width:1px;height:26px;background:rgba(255,255,255,.2);}
+.topbar-title{font-size:15px;font-weight:600;}
+.topbar-spacer{flex:1;}
+.topbar-btn{display:flex;align-items:center;gap:6px;padding:6px 10px;border-radius:8px;font-size:12px;cursor:pointer;transition:background .2s;color:#fff;border:none;background:transparent;font-family:inherit;}
+.topbar-btn:hover{background:rgba(255,255,255,.12);}
+.topbar-avatar{width:28px;height:28px;border-radius:50%;background:var(--g5);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:11px;flex-shrink:0;}
+
+/* NAV */
+.nav{background:var(--g9);display:flex;padding:0 12px;flex-shrink:0;overflow-x:auto;scrollbar-width:none;}
+.nav::-webkit-scrollbar{display:none;}
+.nav-item{padding:10px 14px;font-size:12px;font-weight:500;color:rgba(255,255,255,.55);cursor:pointer;border-bottom:3px solid transparent;white-space:nowrap;transition:all .2s;display:flex;align-items:center;gap:5px;}
+.nav-item:hover{color:rgba(255,255,255,.9);}
+.nav-item.active{color:var(--g4);border-bottom-color:var(--g4);}
+
+/* LAYOUT */
+.layout{display:flex;flex:1;overflow:hidden;}
+
+/* SIDEBAR */
+.sidebar{width:300px;flex-shrink:0;background:var(--w);border-right:1px solid var(--s3);display:flex;flex-direction:column;overflow:hidden;transition:width .3s;}
+.sidebar.hidden{width:0;overflow:hidden;}
+.sb-head{padding:12px 14px;border-bottom:1px solid var(--s1);display:flex;align-items:center;justify-content:space-between;gap:8px;flex-shrink:0;}
+.sb-title{font-size:13px;font-weight:700;}
+.sb-count{font-size:11px;background:var(--g1);color:var(--g7);padding:2px 7px;border-radius:20px;font-weight:700;}
+.sb-ctrl{display:flex;gap:4px;padding:6px 10px;border-bottom:1px solid var(--s1);flex-shrink:0;flex-wrap:wrap;}
+.sb-list{flex:1;overflow-y:auto;}
+
+/* Sidebar day filter */
+.sb-dayfilter{padding:8px 10px;border-bottom:1px solid var(--s1);flex-shrink:0;}
+.sb-dayfilter-label{font-size:10px;font-weight:700;color:var(--s5);text-transform:uppercase;letter-spacing:.4px;margin-bottom:5px;}
+.day-btns{display:flex;flex-wrap:wrap;gap:3px;}
+.day-btn{padding:3px 7px;border:1.5px solid var(--s3);border-radius:5px;font-size:10px;font-weight:700;font-family:inherit;cursor:pointer;background:var(--w);color:var(--s7);transition:all .15s;}
+.day-btn.active{background:var(--g6);color:#fff;border-color:var(--g6);}
+.day-btn:hover:not(.active){border-color:var(--g5);color:var(--g7);}
+.turno-btns{display:flex;gap:3px;margin-top:4px;}
+.turno-btn{padding:3px 7px;border:1.5px solid var(--s3);border-radius:5px;font-size:10px;font-weight:700;font-family:inherit;cursor:pointer;background:var(--w);color:var(--s7);transition:all .15s;}
+.turno-btn.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+
+/* Sidebar items */
+.sb-item{padding:9px 12px;display:flex;align-items:center;gap:8px;cursor:pointer;transition:background .15s;border-left:3px solid transparent;}
+.sb-item:hover{background:var(--s1);}
+.sb-item.active{background:var(--g0);border-left-color:var(--g5);}
+.sb-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+.sb-info{flex:1;min-width:0;}
+.sb-name{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.sb-sub{font-size:10px;color:var(--s5);margin-top:1px;}
+.sb-badge{font-size:10px;padding:2px 6px;border-radius:20px;font-weight:700;flex-shrink:0;}
+.badge-ok{background:var(--g1);color:var(--g7);}
+.badge-warn{background:#fef3c7;color:#92400e;}
+.badge-alert{background:var(--redl);color:var(--red);}
+
+/* CONTENT */
+.content{flex:1;overflow:hidden;display:flex;flex-direction:column;min-width:0;}
+.map-wrap{flex:1;position:relative;display:none;}
+.map-wrap.active{display:flex;flex-direction:column;}
+#map{flex:1;min-height:0;}
+.panel{flex:1;overflow-y:auto;padding:20px;display:none;background:var(--s0);}
+.panel.active{display:block;}
+
+/* MAP TOOLS */
+.map-tb{position:absolute;top:10px;right:10px;z-index:500;display:flex;flex-direction:column;gap:6px;}
+.map-tbtn{background:var(--w);border:1px solid var(--s3);border-radius:8px;padding:6px 12px;font-size:11px;font-weight:700;font-family:inherit;cursor:pointer;box-shadow:var(--sh1);transition:all .2s;}
+.map-tbtn:hover{background:var(--g0);border-color:var(--g4);}
+.map-legend{position:absolute;bottom:28px;left:10px;z-index:500;background:var(--w);border-radius:10px;padding:10px 13px;box-shadow:var(--sh2);border:1px solid var(--s3);max-height:200px;overflow-y:auto;font-size:11px;min-width:140px;}
+.legend-title{font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--s5);margin-bottom:6px;}
+.legend-item{display:flex;align-items:center;gap:6px;margin-bottom:4px;}
+.legend-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
+#overlap-warn{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:500;max-width:400px;}
+
+/* PANEL HEADER */
+.ph{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px;}
+.ph-title{font-size:18px;font-weight:700;}
+
+/* STATS */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px;}
+.stat{background:var(--w);border-radius:var(--r);padding:14px 16px;border:1px solid var(--s3);box-shadow:var(--sh1);}
+.stat-val{font-size:24px;font-weight:700;color:var(--g7);}
+.stat-lbl{font-size:10px;color:var(--s5);text-transform:uppercase;letter-spacing:.4px;margin-top:2px;}
+
+/* CARDS GRID */
+.cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;}
+.card{background:var(--w);border-radius:var(--rl);padding:18px;box-shadow:var(--sh1);border:1px solid var(--s3);}
+.card-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:8px;flex-wrap:wrap;}
+.card-title{font-size:13px;font-weight:700;}
+
+/* PROGRESS BAR */
+.pbar-wrap{margin-top:8px;}
+.pbar-label{font-size:10px;color:var(--s5);margin-bottom:2px;}
+.pbar{background:var(--s1);border-radius:4px;height:5px;overflow:hidden;}
+.pbar-fill{height:5px;border-radius:4px;transition:width .4s;}
+
+/* TABLE */
+.tbl-wrap{overflow-x:auto;border-radius:var(--r);border:1px solid var(--s3);}
+table{width:100%;border-collapse:collapse;font-size:12px;}
+th{background:var(--s1);padding:9px 11px;text-align:left;font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--s7);border-bottom:1px solid var(--s3);white-space:nowrap;}
+td{padding:9px 11px;border-bottom:1px solid var(--s1);vertical-align:middle;}
+tr:last-child td{border-bottom:none;}
+tr:hover td{background:var(--s0);}
+
+/* BUTTONS */
+.btn{display:inline-flex;align-items:center;gap:5px;padding:8px 14px;border-radius:8px;font-size:12px;font-weight:700;font-family:inherit;cursor:pointer;border:none;transition:all .2s;white-space:nowrap;}
+.btn-primary{background:var(--g6);color:#fff;}
+.btn-primary:hover{background:var(--g7);}
+.btn-secondary{background:var(--s1);color:var(--s7);}
+.btn-secondary:hover{background:var(--s3);}
+.btn-danger{background:var(--redl);color:var(--red);}
+.btn-danger:hover{background:#fecaca;}
+.btn-amber{background:#fef3c7;color:#92400e;}
+.btn-sm{padding:5px 9px;font-size:11px;}
+.flex-gap{display:flex;gap:7px;align-items:center;flex-wrap:wrap;}
+
+/* FORMS */
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.form-full{grid-column:1/-1;}
+.fg{display:flex;flex-direction:column;gap:4px;}
+.flabel{font-size:10px;font-weight:700;color:var(--s7);text-transform:uppercase;letter-spacing:.4px;}
+.finput,.fselect{padding:9px 11px;border:1.5px solid var(--s3);border-radius:8px;font-size:13px;font-family:inherit;outline:none;transition:border .2s;background:var(--w);width:100%;}
+.finput:focus,.fselect:focus{border-color:var(--g5);}
+.finput:disabled,.fselect:disabled{background:var(--s1);color:var(--s5);cursor:not-allowed;}
+.fhint{font-size:10px;color:var(--s5);}
+
+/* MODAL */
+.modal-ov{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:1000;padding:16px;}
+.modal-ov.open{display:flex;}
+.modal{background:var(--w);border-radius:var(--rl);padding:24px;width:100%;max-width:640px;max-height:92vh;overflow-y:auto;box-shadow:var(--sh3);animation:su .2s ease;}
+.modal-sm{max-width:420px;}
+@keyframes su{from{transform:translateY(16px);opacity:0}to{transform:translateY(0);opacity:1}}
+.modal-title{font-size:16px;font-weight:700;margin-bottom:18px;display:flex;align-items:center;gap:7px;}
+.modal-actions{display:flex;gap:7px;justify-content:flex-end;margin-top:18px;}
+
+/* CHIP */
+.chip{display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:700;}
+.chip-red{background:var(--redl);color:var(--red);}
+.chip-green{background:var(--g1);color:var(--g7);}
+.chip-amber{background:#fef3c7;color:#92400e;}
+.chip-blue{background:#e3f2fd;color:var(--blue);}
+
+/* SEARCH AUTOCOMPLETE */
+.autocomplete-wrap{position:relative;}
+.autocomplete-list{position:absolute;top:100%;left:0;right:0;background:var(--w);border:1.5px solid var(--g5);border-top:none;border-radius:0 0 8px 8px;z-index:100;max-height:200px;overflow-y:auto;box-shadow:var(--sh2);}
+.autocomplete-item{padding:9px 12px;font-size:12px;cursor:pointer;border-bottom:1px solid var(--s1);}
+.autocomplete-item:hover{background:var(--g0);}
+.autocomplete-item:last-child{border-bottom:none;}
+.autocomplete-hint{padding:8px 12px;font-size:11px;color:var(--s5);font-style:italic;}
+
+/* DAY SCHEDULE TABLE (in ruta modal) */
+.day-sched{width:100%;border-collapse:collapse;font-size:12px;margin-top:6px;}
+.day-sched th{background:var(--g1);color:var(--g7);padding:6px 10px;font-size:10px;text-transform:uppercase;letter-spacing:.3px;font-weight:700;border:1px solid var(--s3);}
+.day-sched td{padding:5px 8px;border:1px solid var(--s3);}
+.day-sched input{width:60px;padding:4px 6px;border:1px solid var(--s3);border-radius:5px;font-size:12px;font-family:inherit;text-align:center;}
+
+/* MISC */
+.mono{font-family:'DM Mono',monospace;}
+.muted{color:var(--s5);}
+.text-sm{font-size:11px;}
+.mt{margin-top:10px;}
+.section-sep{height:1px;background:var(--s3);margin:16px 0;}
+
+/* ═══ MOBILE ═══ */
+@media(max-width:768px){
+  .topbar{padding:0 12px;height:48px;}
+  .topbar-title,.topbar-divider{display:none;}
+  .topbar-btn span.btn-text{display:none;}
+  .nav{padding:0 4px;}
+  .nav-item{padding:9px 10px;font-size:11px;}
+  .layout{flex-direction:column;}
+  .sidebar{width:100% !important;max-height:200px;border-right:none;border-bottom:1px solid var(--s3);}
+  .sb-list{flex-direction:row;display:flex;overflow-x:auto;overflow-y:hidden;padding:4px 6px;}
+  .sb-item{min-width:130px;border-left:none;border-bottom:3px solid transparent;flex-direction:column;align-items:flex-start;padding:6px 8px;}
+  .sb-item.active{border-bottom-color:var(--g5);}
+  .stats{grid-template-columns:1fr 1fr;}
+  .stat-val{font-size:20px;}
+  .cards-grid{grid-template-columns:1fr;}
+  .form-grid{grid-template-columns:1fr;}
+  .form-full{grid-column:1;}
+  .panel{padding:12px;}
+  .ph{flex-direction:column;align-items:flex-start;}
+  .modal{padding:16px;}
+  .hide-mobile{display:none !important;}
+  .login-box{padding:28px 20px;}
+  .portal-cards{gap:14px;}
+  .portal-card{width:160px;padding:20px 16px;}
+  .portal-icon{font-size:40px;}
+  .portal-card h2{font-size:14px;}
+}
+@media(max-width:480px){
+  .stats{grid-template-columns:1fr;}
+  .portal-cards{flex-direction:column;align-items:center;}
+  .portal-card{width:100%;max-width:280px;}
+}
+</style>
+</head>
+<body>
+
+<!-- ═══ LOGIN ═══ -->
+<div id="screen-login">
+  <div class="login-box">
+    <img class="login-logo" src="https://www.aborgama.com/logo_aborgama.png" alt="Aborgama" onerror="this.style.display='none'">
+    <div class="login-title">Portal Aborgama</div>
+    <div class="login-sub">Ingresá tus credenciales</div>
+    <div class="login-group"><label class="login-label">Email</label>
+      <input class="login-input" id="li-email" type="email" placeholder="usuario@aborgama.com" autocomplete="username">
+    </div>
+    <div class="login-group"><label class="login-label">Contraseña</label>
+      <input class="login-input" id="li-pass" type="password" placeholder="••••••••" autocomplete="current-password">
+    </div>
+    <button class="login-btn" onclick="doLogin()">Ingresar</button>
+    <div class="login-error" id="li-error"></div>
+  </div>
+</div>
+
+<!-- ═══ PORTAL SELECTOR ═══ -->
+<div id="screen-portal" style="display:none">
+  <div class="portal-header">
+    <img src="https://www.aborgama.com/logo_aborgama.png" alt="Aborgama" onerror="this.style.display='none'">
+    <h1>Bienvenido, <span id="portal-name">—</span></h1>
+    <p>Seleccioná el módulo al que querés ingresar</p>
+  </div>
+  <div class="portal-cards" id="portal-cards">
+    <div class="portal-card" id="portal-rutas" onclick="enterModule('rutas')">
+      <div class="portal-icon">🚛</div>
+      <h2>Rutas Comerciales</h2>
+      <p>Gestión de rutas, clientes y recolección</p>
+      <span class="portal-badge">Módulo Rutas</span>
+    </div>
+    <div class="portal-card disabled" id="portal-taller" onclick="enterModule('taller')">
+      <div class="portal-icon">🔧</div>
+      <h2>Taller & Flota</h2>
+      <p>Mantenimiento, horas y reparaciones</p>
+      <span class="portal-badge" style="background:#e3f2fd;color:var(--blue)">Próximamente</span>
+    </div>
+  </div>
+  <span class="portal-logout" onclick="doLogout()">↩ Cerrar sesión</span>
+</div>
+
+<!-- ═══ MÓDULO RUTAS ═══ -->
+<div id="screen-rutas" style="display:none;flex-direction:column;height:100vh;">
+
+  <div class="topbar">
+    <img class="topbar-logo" src="https://www.aborgama.com/logo_aborgama.png" alt="" onerror="this.style.display='none'">
+    <div class="topbar-divider"></div>
+    <span class="topbar-title">Rutas Comerciales</span>
+    <div class="topbar-spacer"></div>
+    <button class="topbar-btn" onclick="showPortal()" title="Volver al portal">
+      <span>⬅</span><span class="btn-text">Portal</span>
+    </button>
+    <button class="topbar-btn" onclick="openCambiarClave()">
+      <span>🔑</span><span class="btn-text">Mi clave</span>
+    </button>
+    <button class="topbar-btn" onclick="doLogout()">
+      <div class="topbar-avatar" id="tb-avatar">?</div>
+      <span class="btn-text" id="tb-user">—</span>
+    </button>
+  </div>
+
+  <div class="nav" id="rutas-nav">
+    <div class="nav-item active" data-tab="dashboard" onclick="showTab('dashboard')">📊 Dashboard</div>
+    <div class="nav-item" data-tab="mapa"        onclick="showTab('mapa')">🗺️ Mapa</div>
+    <div class="nav-item" data-tab="direcciones" onclick="showTab('direcciones')">📍 Clientes</div>
+    <div class="nav-item" data-tab="temporales"  onclick="showTab('temporales')">⏱ Temporales</div>
+    <div class="nav-item" data-tab="rutas"       onclick="showTab('rutas')">🚛 Rutas</div>
+    <div class="nav-item" data-tab="importar"    onclick="showTab('importar')">📥 Importar</div>
+    <div class="nav-item" data-tab="exportar"    onclick="showTab('exportar')">📤 Exportar</div>
+    <div class="nav-item" data-tab="usuarios"    onclick="showTab('usuarios')" id="tab-usuarios" style="display:none">👥 Usuarios</div>
+  </div>
+
+  <div class="layout">
+    <!-- SIDEBAR -->
+    <div class="sidebar" id="sidebar" style="display:none">
+      <div class="sb-head">
+        <span class="sb-title">Rutas</span>
+        <span class="sb-count" id="sb-count">0</span>
+      </div>
+      <div class="sb-ctrl">
+        <button class="btn btn-sm btn-secondary" onclick="selAllRutas()">Todas</button>
+        <button class="btn btn-sm btn-secondary" onclick="clrAllRutas()">Ninguna</button>
+        <button class="btn btn-sm btn-secondary" onclick="fitMap()">⊡</button>
+      </div>
+      <div class="sb-dayfilter">
+        <div class="sb-dayfilter-label">Filtrar por día</div>
+        <div class="day-btns" id="day-btns">
+          <button class="day-btn active" onclick="setDia(this,'')">Todos</button>
+          <button class="day-btn" onclick="setDia(this,'lunes')">Lu</button>
+          <button class="day-btn" onclick="setDia(this,'martes')">Ma</button>
+          <button class="day-btn" onclick="setDia(this,'miercoles')">Mi</button>
+          <button class="day-btn" onclick="setDia(this,'jueves')">Ju</button>
+          <button class="day-btn" onclick="setDia(this,'viernes')">Vi</button>
+          <button class="day-btn" onclick="setDia(this,'sabado')">Sa</button>
+          <button class="day-btn" onclick="setDia(this,'domingo')">Do</button>
+        </div>
+        <div class="turno-btns" id="turno-btns" style="margin-top:5px">
+          <button class="turno-btn active" onclick="setTurno(this,'')">Todos</button>
+          <button class="turno-btn" onclick="setTurno(this,'Mañana')">🌅 Mañana</button>
+          <button class="turno-btn" onclick="setTurno(this,'Tarde')">🌆 Tarde</button>
+          <button class="turno-btn" onclick="setTurno(this,'Noche')">🌙 Noche</button>
+        </div>
+      </div>
+      <div class="sb-list" id="sb-list"></div>
+    </div>
+
+    <div class="content">
+      <!-- MAP -->
+      <div class="map-wrap" id="panel-mapa">
+        <div id="map"></div>
+        <div class="map-tb">
+          <button class="map-tbtn" onclick="fitMap()">⊡ Ver todo</button>
+          <button class="map-tbtn" onclick="toggleLegend()">☰ Leyenda</button>
+        </div>
+        <div id="overlap-warn"></div>
+        <div class="map-legend" id="map-legend">
+          <div class="legend-title">Rutas activas</div>
+          <div id="legend-items"></div>
+        </div>
+      </div>
+
+      <!-- DASHBOARD -->
+      <div class="panel active" id="panel-dashboard">
+        <div class="stats" id="stats"></div>
+        <div class="cards-grid" id="dash-cards"></div>
+      </div>
+
+      <!-- CLIENTES/DIRECCIONES -->
+      <div class="panel" id="panel-direcciones">
+        <div class="ph">
+          <div class="ph-title">Clientes</div>
+          <div class="flex-gap">
+            <select class="finput" id="dir-fil-ruta" style="width:150px" onchange="renderDirs()">
+              <option value="">Todas las rutas</option>
+            </select>
+            <input class="finput" id="dir-fil-q" placeholder="🔍 Buscar..." style="width:170px" oninput="renderDirs()">
+            <button class="btn btn-primary" onclick="openDirModal()">+ Nuevo cliente</button>
+          </div>
+        </div>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr>
+              <th>Cód.</th><th>Ruta</th><th>Cliente</th><th class="hide-mobile">Dirección</th>
+              <th class="hide-mobile">Frecuencia</th><th>Turno</th><th class="hide-mobile">Residuo</th>
+              <th>m³</th><th>Orden</th><th>Acciones</th>
+            </tr></thead>
+            <tbody id="dir-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- TEMPORALES -->
+      <div class="panel" id="panel-temporales">
+        <div class="ph">
+          <div class="ph-title">Paradas Temporales</div>
+          <button class="btn btn-primary" onclick="openTempModal()">+ Nueva temporal</button>
+        </div>
+        <div class="card" style="margin-bottom:14px;background:var(--amberl);border-color:#fde68a">
+          <p style="font-size:12px;color:#92400e">💡 Las paradas temporales no quedan fijas en la ruta. Al completarlas, si son recurrentes avanzan a la próxima fecha. Podés seleccionar un cliente existente o crear uno nuevo.</p>
+        </div>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Ruta</th><th>Cliente</th><th class="hide-mobile">Dirección</th><th>Fecha</th><th>Frecuencia</th><th>Estado</th><th>Acciones</th></tr></thead>
+            <tbody id="temp-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- RUTAS -->
+      <div class="panel" id="panel-rutas">
+        <div class="ph">
+          <div class="ph-title">Rutas</div>
+          <button class="btn btn-primary" onclick="openRutaModal()">+ Nueva ruta</button>
+        </div>
+        <div style="background:var(--w);border-radius:var(--r);padding:12px 14px;border:1px solid var(--s3);margin-bottom:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <span style="font-size:11px;font-weight:700;color:var(--s7)">Ver clientes del día:</span>
+          <div class="day-btns" id="rutas-day-btns">
+            <button class="day-btn active" onclick="setDiaRutas(this,'')">Todos</button>
+            <button class="day-btn" onclick="setDiaRutas(this,'lunes')">Lunes</button>
+            <button class="day-btn" onclick="setDiaRutas(this,'martes')">Martes</button>
+            <button class="day-btn" onclick="setDiaRutas(this,'miercoles')">Miércoles</button>
+            <button class="day-btn" onclick="setDiaRutas(this,'jueves')">Jueves</button>
+            <button class="day-btn" onclick="setDiaRutas(this,'viernes')">Viernes</button>
+            <button class="day-btn" onclick="setDiaRutas(this,'sabado')">Sábado</button>
+            <button class="day-btn" onclick="setDiaRutas(this,'domingo')">Domingo</button>
+          </div>
+        </div>
+        <div class="cards-grid" id="rutas-grid"></div>
+      </div>
+
+      <!-- IMPORTAR -->
+      <div class="panel" id="panel-importar">
+        <div class="ph"><div class="ph-title">Importar Clientes</div></div>
+        <div class="card">
+          <div class="card-head">
+            <div class="card-title">📋 Formato del archivo</div>
+            <button class="btn btn-sm btn-secondary" onclick="descargarTemplate()">⬇ Descargar Template</button>
+          </div>
+          <div style="font-size:11px;color:var(--s5);line-height:1.8">
+            Columnas obligatorias: <b>nombre</b>, <b>direccion</b>, <b>m3_promedio</b>, <b>frecuencia</b><br>
+            Opcionales: <b>tipo_residuo</b>, <b>vehiculo_pref</b>, <b>turno</b>, <b>parada_max_min</b>, <b>notas</b><br>
+            Acepta <b>.xlsx</b> y <b>.csv</b> — K-Means asigna rutas por zona + tipo de residuo
+          </div>
+        </div>
+        <div class="card" style="margin-top:12px">
+          <div class="card-head"><div class="card-title">📂 Cargar archivo</div></div>
+          <div class="flex-gap">
+            <label style="cursor:pointer">
+              <input type="file" id="imp-file" accept=".csv,.txt,.xlsx,.xls" style="display:none" onchange="previewImport(this)">
+              <div class="btn btn-secondary">📂 Seleccionar archivo</div>
+            </label>
+            <span id="imp-filename" class="muted text-sm">Ningún archivo seleccionado</span>
+          </div>
+          <div id="imp-preview" style="display:none;margin-top:14px">
+            <div style="font-size:12px;font-weight:600;margin-bottom:8px" id="imp-prev-title"></div>
+            <div class="tbl-wrap" style="max-height:180px;overflow-y:auto">
+              <table><thead><tr id="imp-prev-head"></tr></thead><tbody id="imp-prev-body"></tbody></table>
+            </div>
+            <div style="margin-top:12px;display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+              <div class="fg" style="min-width:240px">
+                <label class="flabel">Asignación</label>
+                <select class="fselect" id="imp-ruta-sel"></select>
+                <span class="fhint">K-Means auto agrupa por zona geográfica + tipo de residuo</span>
+              </div>
+              <button class="btn btn-primary" onclick="ejecutarImport()">⚡ Importar <span id="imp-count"></span></button>
+            </div>
+          </div>
+          <div id="imp-result" style="margin-top:12px"></div>
+        </div>
+      </div>
+
+      <!-- EXPORTAR -->
+      <div class="panel" id="panel-exportar">
+        <div class="ph"><div class="ph-title">Exportar</div></div>
+        <div class="card">
+          <div class="card-head"><div class="card-title">Seleccioná la ruta</div></div>
+          <div class="fg" style="max-width:280px;margin-bottom:14px">
+            <label class="flabel">Ruta</label>
+            <select class="fselect" id="exp-ruta">
+              <option value="">— Todas las rutas —</option>
+            </select>
+          </div>
+          <div class="flex-gap">
+            <button class="btn btn-primary" onclick="exportExcel()">📊 Excel</button>
+            <button class="btn btn-secondary" onclick="exportCSV()">⬇ CSV</button>
+            <button class="btn btn-secondary" onclick="exportPrint()">🖨 Imprimir</button>
+          </div>
+          <p class="fhint mt">Ordenado por punto de recolección</p>
+        </div>
+        <div class="card" style="margin-top:12px">
+          <div class="card-head"><div class="card-title">Alertas activas</div></div>
+          <div id="exp-alerts"></div>
+        </div>
+      </div>
+
+      <!-- USUARIOS -->
+      <div class="panel" id="panel-usuarios">
+        <div class="ph">
+          <div class="ph-title">Usuarios</div>
+          <button class="btn btn-primary" onclick="openUsrModal()">+ Nuevo usuario</button>
+        </div>
+        <div class="tbl-wrap">
+          <table><thead><tr><th>Email</th><th>Rol</th><th>Módulos</th><th>Acciones</th></tr></thead>
+          <tbody id="usr-tbody"></tbody></table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODALES ═══ -->
+
+<!-- Modal: Nueva dirección/cliente -->
+<div class="modal-ov" id="modal-dir">
+  <div class="modal">
+    <div class="modal-title">📍 <span id="modal-dir-title">Nuevo Cliente</span></div>
+    <input type="hidden" id="dir-id">
+    <div class="form-grid">
+      <div class="fg">
+        <label class="flabel">Ruta *</label>
+        <select class="fselect" id="dir-ruta" onchange="onRutaChange()"></select>
+      </div>
+      <div class="fg">
+        <label class="flabel">Cliente *</label>
+        <input class="finput" id="dir-cliente" placeholder="Empresa S.A.">
+      </div>
+      <div class="fg form-full">
+        <label class="flabel">Dirección *</label>
+        <div class="autocomplete-wrap">
+          <input class="finput" id="dir-dir" placeholder="Av. 18 de Julio 1234, Montevideo" oninput="onDirInput()" autocomplete="off">
+          <div class="autocomplete-list" id="dir-autocomplete" style="display:none"></div>
+        </div>
+        <span class="fhint">Escribí para buscar o hacé click en el mapa abajo</span>
+      </div>
+      <!-- Mini map for manual pin -->
+      <div class="fg form-full">
+        <label class="flabel">Ubicación en mapa <span style="font-weight:400;text-transform:none">(click para marcar manualmente)</span></label>
+        <div id="mini-map" style="height:180px;border-radius:8px;border:1.5px solid var(--s3);overflow:hidden"></div>
+        <div class="flex-gap" style="margin-top:4px">
+          <span class="fhint" id="dir-coords-label">Sin coordenadas</span>
+          <button class="btn btn-sm btn-secondary" onclick="clearDirCoords()" style="margin-left:auto">✕ Limpiar pin</button>
+        </div>
+        <input type="hidden" id="dir-lat">
+        <input type="hidden" id="dir-lng">
+      </div>
+      <div class="fg">
+        <label class="flabel">Vehículo</label>
+        <input class="finput" id="dir-vehiculo" readonly style="background:var(--s1)">
+      </div>
+      <div class="fg">
+        <label class="flabel">Turno</label>
+        <select class="fselect" id="dir-turno">
+          <option>Mañana</option><option>Tarde</option><option>Noche</option>
+        </select>
+      </div>
+      <div class="fg">
+        <label class="flabel">Tipo de Residuo</label>
+        <select class="fselect" id="dir-residuo">
+          <option>Comercial</option><option>Hospitalario</option><option>Industrial</option><option>Reciclados</option><option>Especial</option>
+        </select>
+      </div>
+      <div class="fg">
+        <label class="flabel">Frecuencia</label>
+        <select class="fselect" id="dir-frecuencia">
+          <option value="">— Seleccionar —</option>
+          <option>Todos los días</option><option>Lunes a Viernes</option>
+          <option>Lunes Miércoles y Viernes</option><option>Martes y Jueves</option>
+          <option>Lunes y Viernes</option><option>Solo los lunes</option>
+          <option>Solo los martes</option><option>Solo los miércoles</option>
+          <option>Solo los jueves</option><option>Solo los viernes</option>
+          <option>3 veces por semana</option><option>2 veces por semana</option>
+          <option>Semanal</option><option>Quincenal</option><option>Mensual</option>
+        </select>
+      </div>
+      <div class="fg">
+        <label class="flabel">m³ promedio/visita</label>
+        <input class="finput" id="dir-m3" type="number" value="0" min="0" step="0.1">
+      </div>
+      <div class="fg">
+        <label class="flabel">Parada máx. (min)</label>
+        <input class="finput" id="dir-parada" type="number" value="5" min="1">
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal('modal-dir')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveDir()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Temporal -->
+<div class="modal-ov" id="modal-temp">
+  <div class="modal modal-sm">
+    <div class="modal-title">⏱ Parada Temporal</div>
+    <div class="form-grid" style="grid-template-columns:1fr">
+      <div class="fg">
+        <label class="flabel">Ruta *</label>
+        <select class="fselect" id="temp-ruta" onchange="onTempRutaChange()"></select>
+      </div>
+      <div class="fg">
+        <label class="flabel">Cliente *</label>
+        <select class="fselect" id="temp-cliente-sel" onchange="onTempClienteSel()">
+          <option value="">— Seleccionar cliente existente —</option>
+        </select>
+      </div>
+      <div class="fg">
+        <label class="flabel">O ingresar cliente nuevo</label>
+        <input class="finput" id="temp-cliente-nuevo" placeholder="Nombre del cliente">
+      </div>
+      <div class="fg">
+        <label class="flabel">Dirección</label>
+        <input class="finput" id="temp-dir" placeholder="Se completa al seleccionar cliente">
+      </div>
+      <div class="fg">
+        <label class="flabel">Fecha</label>
+        <input class="finput" id="temp-fecha" type="date">
+      </div>
+      <div class="fg">
+        <label class="flabel">Frecuencia</label>
+        <select class="fselect" id="temp-freq">
+          <option>Una vez</option><option>Semanal</option><option>Quincenal</option><option>Mensual</option>
+        </select>
+      </div>
+      <div class="fg">
+        <label class="flabel">Notas</label>
+        <input class="finput" id="temp-notas" placeholder="Observaciones opcionales">
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal('modal-temp')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveTemp()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Ruta -->
+<div class="modal-ov" id="modal-ruta">
+  <div class="modal">
+    <div class="modal-title">🚛 <span id="modal-ruta-title">Nueva Ruta</span></div>
+    <input type="hidden" id="ruta-id">
+    <div class="form-grid">
+      <div class="fg">
+        <label class="flabel">Nombre de ruta *</label>
+        <input class="finput" id="ruta-nombre" placeholder="RUTA 1, COMCAR...">
+      </div>
+      <div class="fg">
+        <label class="flabel">Tipo de residuo</label>
+        <select class="fselect" id="ruta-residuo">
+          <option value="">Mixto</option>
+          <option>Comercial</option><option>Hospitalario</option><option>Industrial</option><option>Reciclados</option><option>Especial</option>
+        </select>
+      </div>
+      <div class="fg">
+        <label class="flabel">Vehículo</label>
+        <select class="fselect" id="ruta-vehiculo">
+          <option value="Furgón">Furgón (máx 30 m³)</option>
+          <option value="Prensa">Prensa (máx 90 m³)</option>
+        </select>
+      </div>
+      <div class="fg">
+        <label class="flabel">Matrícula</label>
+        <input class="finput" id="ruta-matricula" placeholder="STP-1234">
+      </div>
+      <div class="fg">
+        <label class="flabel">Chofer</label>
+        <input class="finput" id="ruta-chofer" placeholder="Nombre del chofer">
+      </div>
+      <div class="fg">
+        <label class="flabel">Cargador</label>
+        <input class="finput" id="ruta-cargador" placeholder="Nombre del cargador">
+      </div>
+      <div class="fg">
+        <label class="flabel">Color en mapa</label>
+        <input class="finput" id="ruta-color" type="color" value="#4caf50" style="padding:4px;height:38px">
+      </div>
+      <div class="fg">
+        <label class="flabel">Activa</label>
+        <select class="fselect" id="ruta-activa">
+          <option value="true">Sí</option><option value="false">No</option>
+        </select>
+      </div>
+    </div>
+    <!-- Horario por día -->
+    <div class="section-sep"></div>
+    <div style="font-size:12px;font-weight:700;color:var(--s7);margin-bottom:8px">⏱ Tiempo máximo por día (horas)</div>
+    <table class="day-sched">
+      <thead><tr><th>Lunes</th><th>Martes</th><th>Miércoles</th><th>Jueves</th><th>Viernes</th><th>Sábado</th><th>Domingo</th></tr></thead>
+      <tbody><tr>
+        <td><input type="number" id="hs-lun" value="6" min="0" max="24" step="0.5"></td>
+        <td><input type="number" id="hs-mar" value="6" min="0" max="24" step="0.5"></td>
+        <td><input type="number" id="hs-mie" value="6" min="0" max="24" step="0.5"></td>
+        <td><input type="number" id="hs-jue" value="6" min="0" max="24" step="0.5"></td>
+        <td><input type="number" id="hs-vie" value="6" min="0" max="24" step="0.5"></td>
+        <td><input type="number" id="hs-sab" value="0" min="0" max="24" step="0.5"></td>
+        <td><input type="number" id="hs-dom" value="0" min="0" max="24" step="0.5"></td>
+      </tr></tbody>
+    </table>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal('modal-ruta')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveRuta()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Usuario -->
+<div class="modal-ov" id="modal-usr">
+  <div class="modal modal-sm">
+    <div class="modal-title">👤 Nuevo Usuario</div>
+    <div class="form-grid" style="grid-template-columns:1fr">
+      <div class="fg"><label class="flabel">Email *</label><input class="finput" id="usr-email" type="email" placeholder="nombre@aborgama.com"></div>
+      <div class="fg"><label class="flabel">Contraseña *</label><input class="finput" id="usr-pass" type="password" placeholder="Mínimo 6 caracteres"></div>
+      <div class="fg"><label class="flabel">Rol</label>
+        <select class="fselect" id="usr-rol">
+          <option value="operador">Operador</option>
+          <option value="master">Master (admin)</option>
+        </select>
+      </div>
+      <div class="fg"><label class="flabel">Acceso a módulos</label>
+        <select class="fselect" id="usr-modulos">
+          <option value="rutas">Solo Rutas</option>
+          <option value="taller">Solo Taller</option>
+          <option value="ambos">Rutas y Taller</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal('modal-usr')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveUsr()">Crear</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Cambiar clave -->
+<div class="modal-ov" id="modal-clave">
+  <div class="modal modal-sm">
+    <div class="modal-title">🔑 <span id="clave-title">Cambiar contraseña</span></div>
+    <div class="form-grid" style="grid-template-columns:1fr">
+      <div class="fg"><label class="flabel">Nueva contraseña</label><input class="finput" id="clave-nueva" type="password" placeholder="Mínimo 6 caracteres"></div>
+      <div class="fg"><label class="flabel">Confirmar</label><input class="finput" id="clave-conf" type="password" placeholder="Repetí la contraseña"></div>
+      <div style="color:var(--red);font-size:12px;min-height:16px" id="clave-err"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal('modal-clave')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveClave()">Guardar</button>
+    </div>
+  </div>
+</div>
+
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<!-- Firebase compat (funciona sin servidor, sin type=module) -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
-<!-- SheetJS para exportar Excel -->
 <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
 <script>
-const firebaseConfig = {
-  apiKey: "AIzaSyBO8R0z2_7MpW-mZcTsrmAk4RB-d3o5GAM",
-  authDomain: "rutas-comerciales-93e3f.firebaseapp.com",
-  projectId: "rutas-comerciales-93e3f",
-  storageBucket: "rutas-comerciales-93e3f.firebasestorage.app",
-  messagingSenderId: "1064735256991",
-  appId: "1:1064735256991:web:3167a3e1108d616c26cdaa"
-};
-firebase.initializeApp(firebaseConfig);
+// ═══════════════════════════════════════════════
+//  FIREBASE INIT
+// ═══════════════════════════════════════════════
+firebase.initializeApp({
+  apiKey:"AIzaSyBO8R0z2_7MpW-mZcTsrmAk4RB-d3o5GAM",
+  authDomain:"rutas-comerciales-93e3f.firebaseapp.com",
+  projectId:"rutas-comerciales-93e3f",
+  storageBucket:"rutas-comerciales-93e3f.firebasestorage.app",
+  messagingSenderId:"1064735256991",
+  appId:"1:1064735256991:web:3167a3e1108d616c26cdaa"
+});
 const auth = firebase.auth();
 const db   = firebase.firestore();
 
@@ -30,145 +781,136 @@ const db   = firebase.firestore();
 //  CONSTANTS
 // ═══════════════════════════════════════════════
 const MAX_DIRS   = 100;
-const MAX_HRS    = 6;
 const CAP_FURGO  = 30;
 const CAP_PRENSA = 90;
+const PLANTA     = { lat:-34.8572, lng:-56.0927 };
 
-// Planta Aborgama — punto de inicio y fin de todas las rutas
-const PLANTA = { lat: -34.8572, lng: -56.0927, nombre: 'Planta Aborgama' };
+const DIA_MAP = {
+  lunes:    ['lunes','lunes a viernes','lunes miércoles y viernes','lunes y viernes','todos los días','3 veces','2 veces','semanal'],
+  martes:   ['martes','martes y jueves','todos los días','3 veces','2 veces','semanal'],
+  miercoles:['miércoles','lunes miércoles y viernes','todos los días','3 veces','2 veces','semanal'],
+  jueves:   ['jueves','martes y jueves','todos los días','3 veces','2 veces','semanal'],
+  viernes:  ['viernes','lunes a viernes','lunes miércoles y viernes','lunes y viernes','todos los días','3 veces','2 veces','semanal'],
+  sabado:   ['sábado','todos los días'],
+  domingo:  ['domingo','todos los días'],
+};
 
-const RUTAS_DEFAULT = [];  // Sin rutas pre-cargadas — el usuario las crea desde cero
+function matchDia(freq, dia) {
+  if (!dia) return true;
+  if (!freq) return false;
+  const n = s => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  const f = n(freq);
+  return (DIA_MAP[dia]||[]).some(k => f.includes(n(k)));
+}
 
 // ═══════════════════════════════════════════════
 //  STATE
 // ═══════════════════════════════════════════════
-let currentUser  = null;
-let currentRole  = 'operador';
-let rutas        = [];
-let direcciones  = [];
-let temporales   = [];
-let map          = null;
-let mapLayers    = {};       // rutaId → { markers:[], lines:[] }
-let visibleRutas = new Set();
-let filtroDia    = '';
-let filtroDiaRutas = '';
-
-const DIA_MAP = {
-  lunes:     ['lunes','lunes a viernes','lunes miércoles y viernes','lunes y viernes','todos los días','3 veces','2 veces','semanal'],
-  martes:    ['martes','martes y jueves','todos los días','3 veces','2 veces','semanal'],
-  miercoles: ['miércoles','lunes miércoles y viernes','todos los días','3 veces','2 veces','semanal'],
-  jueves:    ['jueves','martes y jueves','todos los días','3 veces','2 veces','semanal'],
-  viernes:   ['viernes','lunes a viernes','lunes miércoles y viernes','lunes y viernes','todos los días','3 veces','2 veces','semanal'],
-  sabado:    ['sábado','todos los días'],
-  domingo:   ['domingo','todos los días'],
-};
-
-function matchesDia(frecuencia, dia) {
-  if (!dia) return true;
-  if (!frecuencia) return false;
-  const norm = s => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
-  const f = norm(frecuencia);
-  return (DIA_MAP[dia]||[]).some(k => f.includes(norm(k)));
-}
-
-window.filtrarPorDia = dia => {
-  filtroDia = dia;
-  document.querySelectorAll('#dia-filter-btns .dia-btn').forEach(b => b.classList.remove('active'));
-  event.target.classList.add('active');
-  const NOMBRES = {lunes:'Lunes',martes:'Martes',miercoles:'Miércoles',jueves:'Jueves',viernes:'Viernes',sabado:'Sábado',domingo:'Domingo'};
-  document.getElementById('dia-filter-label').textContent = dia ? `Mostrando: ${NOMBRES[dia]}` : '';
-  renderSidebarRoutes();
-  renderMap();
-};
-
-window.filtrarRutasPorDia = dia => {
-  filtroDiaRutas = dia;
-  document.querySelectorAll('#dia-filter-rutas-btns .dia-btn').forEach(b => b.classList.remove('active'));
-  event.target.classList.add('active');
-  renderRutas();
-};
+let me = null, myRole = 'operador', myModulos = 'rutas';
+let rutas=[], dirs=[], temps=[];
+let mapObj=null, mapLayers={}, visRutas=new Set();
+let miniMap=null, miniMarker=null;
+let filDia='', filTurno='', filDiaRutas='';
+let activeTab='dashboard';
+let importRows=[];
+let geocodeTimer=null;
 
 // ═══════════════════════════════════════════════
-//  AUTH LISTENER
+//  AUTH
 // ═══════════════════════════════════════════════
 auth.onAuthStateChanged(async user => {
   if (user) {
-    currentUser = user;
+    me = user;
     const snap = await db.collection('usuarios').doc(user.uid).get();
-    currentRole = snap.exists ? (snap.data().rol || 'operador') : 'operador';
-    showApp();
-    await seedRutas();
-    listenData();
+    if (snap.exists) {
+      myRole    = snap.data().rol || 'operador';
+      myModulos = snap.data().modulos || 'rutas';
+    }
+    showPortalScreen();
   } else {
-    currentUser = null;
-    showLogin();
+    me = null;
+    show('screen-login');
   }
 });
 
-async function seedRutas() {
-  const snap = await db.collection('rutas').get();
-  if (snap.empty) {
-    const batch = db.batch();
-    RUTAS_DEFAULT.forEach(r => batch.set(db.collection('rutas').doc(r.id), r));
-    await batch.commit();
-  }
-}
-
-function listenData() {
-  db.collection('rutas').onSnapshot(snap => {
-    rutas = snap.docs.map(d => ({ ...d.data(), id: d.id }));
-    rutas.sort((a,b) => a.nombre.localeCompare(b.nombre));
-    refreshUI();
-  });
-  db.collection('direcciones').onSnapshot(snap => {
-    direcciones = snap.docs.map(d => ({ ...d.data(), id: d.id }));
-    refreshUI();
-  });
-  db.collection('temporales').onSnapshot(snap => {
-    temporales = snap.docs.map(d => ({ ...d.data(), id: d.id }));
-    refreshUI();
-  });
-}
-
-function refreshUI() {
-  if (activeTab === 'dashboard')   renderDashboard();
-  if (activeTab === 'mapa')        renderMap();
-  if (activeTab === 'direcciones') renderDirecciones();
-  if (activeTab === 'rutas')       renderRutas();
-  if (activeTab === 'temporales')  renderTemporales();
-  if (activeTab === 'importar')    renderImportar();
-  if (activeTab === 'exportar')    renderExportar();
-  if (activeTab === 'usuarios')    renderUsuarios();
-  renderSidebarRoutes();
-}
-
-// ═══════════════════════════════════════════════
-//  AUTH ACTIONS
-// ═══════════════════════════════════════════════
 window.doLogin = async () => {
-  const email = document.getElementById('login-user').value.trim();
-  const pass  = document.getElementById('login-pass').value;
-  try {
-    await auth.signInWithEmailAndPassword(email, pass);
-  } catch(e) {
-    document.getElementById('login-error').textContent = 'Usuario o contraseña incorrectos.';
-  }
+  const email = gv('li-email').trim();
+  const pass  = gv('li-pass');
+  document.getElementById('li-error').textContent = '';
+  try { await auth.signInWithEmailAndPassword(email, pass); }
+  catch(e) { document.getElementById('li-error').textContent = 'Email o contraseña incorrectos.'; }
 };
 window.doLogout = () => auth.signOut();
 
-function showLogin() {
-  document.getElementById('login-screen').style.display = 'flex';
-  document.getElementById('app').style.display = 'none';
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('li-pass').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
+  document.getElementById('li-email').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
+  document.querySelectorAll('.modal-ov').forEach(o => {
+    o.addEventListener('click', e => { if(e.target===o) o.classList.remove('open'); });
+  });
+});
+
+// ═══════════════════════════════════════════════
+//  PORTAL
+// ═══════════════════════════════════════════════
+function showPortalScreen() {
+  show('screen-portal');
+  document.getElementById('portal-name').textContent = me.email.split('@')[0];
+  // Show/hide modules based on permissions
+  const hasRutas  = ['rutas','ambos','master'].includes(myModulos) || myRole==='master';
+  const hasTaller = ['taller','ambos','master'].includes(myModulos) || myRole==='master';
+  document.getElementById('portal-rutas').classList.toggle('disabled', !hasRutas);
+  document.getElementById('portal-taller').classList.toggle('disabled', !hasTaller);
 }
-function showApp() {
-  document.getElementById('login-screen').style.display = 'none';
-  const appEl = document.getElementById('app');
-  appEl.style.display = 'flex';
-  document.getElementById('topbar-username').textContent = currentUser.email;
-  document.getElementById('topbar-avatar').textContent = currentUser.email[0].toUpperCase();
-  if (currentRole === 'master') document.getElementById('tab-usuarios').style.display = '';
-  initMap();
-  showTab('dashboard');
+
+window.showPortal = () => {
+  hide('screen-rutas');
+  show('screen-portal');
+};
+
+window.enterModule = mod => {
+  if (mod === 'rutas') {
+    hide('screen-portal');
+    document.getElementById('screen-rutas').style.display = 'flex';
+    document.getElementById('tb-user').textContent = me.email.split('@')[0];
+    document.getElementById('tb-avatar').textContent = me.email[0].toUpperCase();
+    if (myRole === 'master') document.getElementById('tab-usuarios').style.display = '';
+    initMap();
+    listenData();
+    showTab('dashboard');
+  }
+};
+
+// ═══════════════════════════════════════════════
+//  FIRESTORE LISTENERS
+// ═══════════════════════════════════════════════
+let _listeners = [];
+function listenData() {
+  _listeners.forEach(u => u());
+  _listeners = [];
+  _listeners.push(db.collection('rutas').onSnapshot(s => {
+    rutas = s.docs.map(d=>({...d.data(),id:d.id})).sort((a,b)=>a.nombre.localeCompare(b.nombre));
+    refreshUI();
+  }));
+  _listeners.push(db.collection('direcciones').onSnapshot(s => {
+    dirs = s.docs.map(d=>({...d.data(),id:d.id}));
+    refreshUI();
+  }));
+  _listeners.push(db.collection('temporales').onSnapshot(s => {
+    temps = s.docs.map(d=>({...d.data(),id:d.id}));
+    refreshUI();
+  }));
+}
+
+function refreshUI() {
+  if (activeTab==='dashboard')   renderDash();
+  if (activeTab==='mapa')        { renderSidebar(); renderMapFull(); }
+  if (activeTab==='direcciones') renderDirs();
+  if (activeTab==='temporales')  renderTemps();
+  if (activeTab==='rutas')       renderRutas();
+  if (activeTab==='exportar')    renderExportar();
+  if (activeTab==='usuarios')    renderUsuarios();
+  renderSidebar();
 }
 
 // ═══════════════════════════════════════════════
@@ -176,21 +918,17 @@ function showApp() {
 // ═══════════════════════════════════════════════
 window.showTab = tab => {
   activeTab = tab;
-  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
-  document.querySelectorAll('.nav-tab').forEach(t => {
-    if (t.dataset.tab === tab) t.classList.add('active');
-  });
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.tab===tab));
   document.querySelectorAll('.panel,.map-wrap').forEach(p => p.classList.remove('active'));
   const sid = document.getElementById('sidebar');
-
-  if (tab === 'mapa') {
+  if (tab==='mapa') {
     sid.style.display = 'flex';
     document.getElementById('panel-mapa').classList.add('active');
-    renderSidebarRoutes();
-    setTimeout(() => { if(map) { map.invalidateSize(); renderMap(); } }, 120);
+    renderSidebar();
+    setTimeout(() => { if(mapObj) { mapObj.invalidateSize(); renderMapFull(); } }, 120);
   } else {
     sid.style.display = 'none';
-    const p = document.getElementById('panel-' + tab);
+    const p = document.getElementById('panel-'+tab);
     if (p) p.classList.add('active');
     refreshUI();
   }
@@ -200,497 +938,531 @@ window.showTab = tab => {
 //  MAP
 // ═══════════════════════════════════════════════
 function initMap() {
-  if (map) return;
-  map = L.map('map', { zoomControl: true }).setView([-34.9, -56.15], 12);
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-    attribution: '© OpenStreetMap contributors © CARTO',
-    subdomains: 'abcd', maxZoom: 19
-  }).addTo(map);
+  if (mapObj) return;
+  mapObj = L.map('map').setView([PLANTA.lat, PLANTA.lng], 12);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{
+    attribution:'© OpenStreetMap © CARTO', subdomains:'abcd', maxZoom:19
+  }).addTo(mapObj);
+  // Planta marker
+  L.marker([PLANTA.lat, PLANTA.lng], {
+    icon: L.divIcon({className:'',html:`<div style="background:#1e4620;color:#fff;width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;border:2px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.4)">🏭</div>`,iconSize:[34,34],iconAnchor:[17,17]}),
+    zIndexOffset:1000
+  }).addTo(mapObj).bindPopup('<b>🏭 Planta Aborgama</b>');
 }
 
-function clearMapLayer(rutaId) {
-  if (!mapLayers[rutaId]) return;
-  mapLayers[rutaId].markers.forEach(m => m.remove());
-  mapLayers[rutaId].lines.forEach(l => l.remove());
-  mapLayers[rutaId] = { markers: [], lines: [] };
-}
-
-function renderMap() {
-  if (!map) return;
-  Object.keys(mapLayers).forEach(clearMapLayer);
+function renderMapFull() {
+  if (!mapObj) return;
+  Object.values(mapLayers).forEach(l => { l.markers.forEach(m=>m.remove()); l.lines.forEach(l=>l.remove()); });
   mapLayers = {};
-
-  const legendEl = document.getElementById('legend-items');
-  legendEl.innerHTML = '';
-
-  // ── Planta marker (always visible) ──
-  if (!window._plantaMarker) {
-    const plantaIcon = L.divIcon({
-      className: '',
-      html: `<div style="background:#1e4620;color:#fff;width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;border:3px solid #fff;box-shadow:0 3px 10px rgba(0,0,0,.4)">🏭</div>`,
-      iconSize:[36,36], iconAnchor:[18,18]
-    });
-    window._plantaMarker = L.marker([PLANTA.lat, PLANTA.lng], {icon: plantaIcon, zIndexOffset: 1000})
-      .addTo(map)
-      .bindPopup('<b>🏭 Planta Aborgama</b><br>Punto de inicio y fin de todas las rutas');
-  }
+  document.getElementById('legend-items').innerHTML = '';
 
   rutas.forEach(ruta => {
-    if (!visibleRutas.has(ruta.id)) return;
-    const dirs = direcciones
-      .filter(d => d.rutaId === ruta.id && d.lat)
-      .filter(d => matchesDia(d.frecuencia, filtroDia))
-      .sort((a,b) => (a.orden||999) - (b.orden||999));
-
-    mapLayers[ruta.id] = { markers: [], lines: [] };
-
-    if (dirs.length > 0) {
-      // Polyline: planta → clientes → planta
-      const latlngs = [
-        [PLANTA.lat, PLANTA.lng],
-        ...dirs.map(d=>[d.lat,d.lng]),
-        [PLANTA.lat, PLANTA.lng]
-      ];
-      const line = L.polyline(latlngs, {
-        color: ruta.color, weight: 3, opacity: .75, dashArray: '7,4'
-      }).addTo(map);
-      mapLayers[ruta.id].lines.push(line);
+    if (!visRutas.has(ruta.id)) return;
+    const allD = dirs.filter(d => d.rutaId===ruta.id && d.lat);
+    const filtered = allD.filter(d => matchDia(d.frecuencia, filDia) && (!filTurno || d.turno===filTurno))
+                         .sort((a,b)=>(a.orden||999)-(b.orden||999));
+    mapLayers[ruta.id] = {markers:[], lines:[]};
+    if (filtered.length > 0) {
+      const pts = [[PLANTA.lat,PLANTA.lng], ...filtered.map(d=>[d.lat,d.lng]), [PLANTA.lat,PLANTA.lng]];
+      mapLayers[ruta.id].lines.push(L.polyline(pts,{color:ruta.color,weight:3,opacity:.75,dashArray:'7,4'}).addTo(mapObj));
     }
-
-    dirs.forEach((d, i) => {
-      const icon = L.divIcon({
-        className: '',
-        html: `<div style="background:${ruta.color};color:#fff;width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.3)">${i+1}</div>`,
-        iconSize:[26,26], iconAnchor:[13,13]
-      });
-      const m = L.marker([d.lat,d.lng],{icon}).addTo(map)
-        .bindPopup(`<b>${d.cliente}</b><br><small>${d.direccion}</small><br><small style="color:#555">Ruta: ${ruta.nombre} · Parada ${i+1} · ${d.m3||0}m³ · ${d.frecuencia||'—'}</small>`);
+    filtered.forEach((d,i) => {
+      const ic = L.divIcon({className:'',html:`<div style="background:${ruta.color};color:#fff;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;border:2px solid #fff;box-shadow:0 2px 5px rgba(0,0,0,.3)">${i+1}</div>`,iconSize:[24,24],iconAnchor:[12,12]});
+      const m = L.marker([d.lat,d.lng],{icon:ic}).addTo(mapObj)
+        .bindPopup(`<b>${d.cliente}</b><br><small>${d.direccion}</small><br><small style="color:#555">${ruta.nombre} · ${d.frecuencia||'—'} · ${d.turno||'—'} · ${d.m3||0}m³</small>`);
       mapLayers[ruta.id].markers.push(m);
     });
-
-    // Temporales
-    temporales.filter(t => t.rutaId === ruta.id && t.lat && t.estado !== 'completada').forEach(t => {
-      const icon = L.divIcon({
-        className:'',
-        html:`<div style="background:#f59e0b;color:#fff;width:22px;height:22px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.3)">T</div>`,
-        iconSize:[22,22],iconAnchor:[11,11]
-      });
-      const m = L.marker([t.lat,t.lng],{icon}).addTo(map)
-        .bindPopup(`<b>⏱ TEMPORAL</b><br>${t.cliente}<br><small>${t.direccion}</small><br><small>Fecha: ${t.fecha||'—'}</small>`);
-      mapLayers[ruta.id].markers.push(m);
-    });
-
-    legendEl.innerHTML += `<div class="legend-item">
-      <div class="legend-dot" style="background:${ruta.color}"></div>
-      <span>${ruta.nombre}</span>
-    </div>`;
+    document.getElementById('legend-items').innerHTML += `<div class="legend-item"><div class="legend-dot" style="background:${ruta.color}"></div><span>${ruta.nombre}</span></div>`;
   });
-
   detectOverlaps();
 }
 
 function detectOverlaps() {
-  // Warn if two visible routes have stops within ~300m of each other
-  const visible = rutas.filter(r => visibleRutas.has(r.id));
-  const warnings = [];
-  for (let i = 0; i < visible.length; i++) {
-    for (let j = i+1; j < visible.length; j++) {
-      const dirsA = direcciones.filter(d=>d.rutaId===visible[i].id&&d.lat);
-      const dirsB = direcciones.filter(d=>d.rutaId===visible[j].id&&d.lat);
-      let overlaps = 0;
-      dirsA.forEach(a => {
-        dirsB.forEach(b => {
-          const dist = Math.hypot(a.lat-b.lat, a.lng-b.lng) * 111000; // ~meters
-          if (dist < 300) overlaps++;
-        });
-      });
-      if (overlaps > 0) warnings.push(`⚠ ${visible[i].nombre} y ${visible[j].nombre} se superponen en ~${overlaps} punto(s)`);
-    }
+  const vis = rutas.filter(r=>visRutas.has(r.id));
+  const warns = [];
+  for (let i=0;i<vis.length;i++) for (let j=i+1;j<vis.length;j++) {
+    const A = dirs.filter(d=>d.rutaId===vis[i].id&&d.lat);
+    const B = dirs.filter(d=>d.rutaId===vis[j].id&&d.lat);
+    let ov = 0;
+    A.forEach(a=>B.forEach(b=>{ if(Math.hypot(a.lat-b.lat,a.lng-b.lng)*111000<300) ov++; }));
+    if (ov>0) warns.push(`⚠ ${vis[i].nombre} y ${vis[j].nombre} se superponen (~${ov} puntos)`);
   }
-  const el = document.getElementById('overlap-warnings');
-  el.innerHTML = warnings.map(w=>`<div class="alert-chip" style="margin-bottom:4px;font-size:11px">${w}</div>`).join('');
-  el.style.display = warnings.length ? '' : 'none';
+  const el = document.getElementById('overlap-warn');
+  el.innerHTML = warns.map(w=>`<div class="chip chip-red" style="margin-bottom:3px">${w}</div>`).join('');
+  el.style.display = warns.length?'':'none';
 }
 
-window.fitAllRoutes = () => {
+window.fitMap = () => {
   const all = Object.values(mapLayers).flatMap(l=>l.markers);
-  if (!map) return;
-  if (all.length) {
-    const group = L.featureGroup([...all, window._plantaMarker].filter(Boolean));
-    map.fitBounds(group.getBounds().pad(.1));
-  } else {
-    map.setView([PLANTA.lat, PLANTA.lng], 12);
-  }
+  if (!mapObj) return;
+  mapObj.setView([PLANTA.lat, PLANTA.lng], 12);
+  if (all.length) mapObj.fitBounds(L.featureGroup(all).getBounds().pad(.15));
 };
 window.toggleLegend = () => {
-  const l = document.getElementById('map-legend');
-  l.style.display = l.style.display === 'none' ? '' : 'none';
+  const l=document.getElementById('map-legend');
+  l.style.display = l.style.display==='none'?'':'none';
 };
-window.selectAllRutas = () => { rutas.forEach(r=>visibleRutas.add(r.id)); renderSidebarRoutes(); renderMap(); };
-window.clearAllRutas  = () => { visibleRutas.clear(); renderSidebarRoutes(); renderMap(); };
+window.selAllRutas = () => { rutas.forEach(r=>visRutas.add(r.id)); renderSidebar(); renderMapFull(); };
+window.clrAllRutas = () => { visRutas.clear(); renderSidebar(); renderMapFull(); };
+window.setDia = (btn, dia) => {
+  filDia = dia;
+  document.querySelectorAll('#day-btns .day-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  renderSidebar(); renderMapFull();
+};
+window.setTurno = (btn, t) => {
+  filTurno = t;
+  document.querySelectorAll('#turno-btns .turno-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  renderSidebar(); renderMapFull();
+};
+window.setDiaRutas = (btn, dia) => {
+  filDiaRutas = dia;
+  document.querySelectorAll('#rutas-day-btns .day-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  renderRutas();
+};
+window.toggleRuta = id => {
+  visRutas.has(id) ? visRutas.delete(id) : visRutas.add(id);
+  renderSidebar(); renderMapFull();
+};
 
-function renderSidebarRoutes() {
-  const list = document.getElementById('sidebar-list');
-  document.getElementById('sidebar-count').textContent = rutas.length;
-
-  list.innerHTML = rutas.map(r => {
-    const allDirs = direcciones.filter(d=>d.rutaId===r.id);
-    const filteredDirs = filtroDia
-      ? allDirs.filter(d => matchesDia(d.frecuencia, filtroDia))
-      : allDirs;
-    const count = allDirs.length;
-    const filtCount = filteredDirs.length;
-    const cap   = r.vehiculo==='Prensa' ? CAP_PRENSA : CAP_FURGO;
-    const m3    = allDirs.reduce((s,d)=>s+(parseFloat(d.m3)||0),0);
-    const vis   = visibleRutas.has(r.id);
-    const over  = count > MAX_DIRS;
-    return `<div class="sidebar-item ${vis?'active':''}" onclick="toggleRutaVisible('${r.id}')">
-      <div style="display:flex;align-items:center;gap:6px;flex:1;min-width:0">
-        <div style="width:10px;height:10px;border-radius:50%;background:${r.color};flex-shrink:0;${vis?'':'opacity:.35'}"></div>
-        <div style="flex:1;min-width:0">
-          <div class="sidebar-item-name" style="${vis?'':'opacity:.5'}">${r.nombre}</div>
-          <div class="sidebar-item-sub">${r.tipo} · ${r.vehiculo}</div>
-        </div>
+function renderSidebar() {
+  const el = document.getElementById('sb-list');
+  document.getElementById('sb-count').textContent = rutas.length;
+  el.innerHTML = rutas.map(r => {
+    const all = dirs.filter(d=>d.rutaId===r.id);
+    const fil = all.filter(d=>matchDia(d.frecuencia,filDia)&&(!filTurno||d.turno===filTurno));
+    const cap = r.vehiculo==='Prensa'?CAP_PRENSA:CAP_FURGO;
+    const m3  = all.reduce((s,d)=>s+(parseFloat(d.m3)||0),0);
+    const vis = visRutas.has(r.id);
+    return `<div class="sb-item${vis?' active':''}" onclick="toggleRuta('${r.id}')">
+      <div class="sb-dot" style="background:${r.color};${vis?'':'opacity:.35'}"></div>
+      <div class="sb-info">
+        <div class="sb-name" style="${vis?'':'opacity:.5'}">${r.nombre}</div>
+        <div class="sb-sub">${r.vehiculo} · ${r.matricula||'—'}</div>
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px">
-        <span class="sidebar-item-badge ${over?'badge-alert':'badge-ok'}">
-          ${filtroDia ? `<span title="Paradas este día">${filtCount}</span><span style="opacity:.5">/${count}</span>` : `${over?'⚠ ':''}${count}`}
-        </span>
-        <span style="font-size:10px;color:var(--slate-500)">${m3.toFixed(0)}/${cap}m³</span>
+        <span class="sb-badge${all.length>MAX_DIRS?' badge-alert':' badge-ok'}">${filDia||filTurno?`${fil.length}/`:''}<b>${all.length}</b></span>
+        <span style="font-size:9px;color:var(--s5)">${m3.toFixed(0)}/${cap}m³</span>
       </div>
     </div>`;
-  }).join('') || '<div style="padding:16px;color:var(--slate-500);font-size:13px">Sin rutas</div>';
+  }).join('')||'<div style="padding:14px;font-size:12px;color:var(--s5)">Sin rutas</div>';
 }
 
-window.toggleRutaVisible = id => {
-  if (visibleRutas.has(id)) visibleRutas.delete(id);
-  else visibleRutas.add(id);
-  renderSidebarRoutes();
-  renderMap();
+// ═══════════════════════════════════════════════
+//  MINI MAP (en modal dirección)
+// ═══════════════════════════════════════════════
+function initMiniMap() {
+  if (miniMap) { miniMap.remove(); miniMap=null; miniMarker=null; }
+  setTimeout(() => {
+    miniMap = L.map('mini-map').setView([PLANTA.lat, PLANTA.lng], 12);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{
+      subdomains:'abcd', maxZoom:19
+    }).addTo(miniMap);
+    miniMap.on('click', e => {
+      const {lat, lng} = e.latlng;
+      setDirCoords(lat, lng);
+      reverseGeocode(lat, lng);
+    });
+  }, 100);
+}
+
+function setDirCoords(lat, lng) {
+  document.getElementById('dir-lat').value = lat;
+  document.getElementById('dir-lng').value = lng;
+  document.getElementById('dir-coords-label').textContent = `📍 ${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+  if (!miniMap) return;
+  if (miniMarker) miniMarker.remove();
+  miniMarker = L.marker([lat,lng],{draggable:true}).addTo(miniMap);
+  miniMarker.on('dragend', e => {
+    const p = e.target.getLatLng();
+    setDirCoords(p.lat, p.lng);
+    reverseGeocode(p.lat, p.lng);
+  });
+  miniMap.setView([lat,lng], 15);
+}
+
+window.clearDirCoords = () => {
+  document.getElementById('dir-lat').value = '';
+  document.getElementById('dir-lng').value = '';
+  document.getElementById('dir-coords-label').textContent = 'Sin coordenadas';
+  if (miniMarker) { miniMarker.remove(); miniMarker=null; }
 };
+
+async function reverseGeocode(lat, lng) {
+  try {
+    const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&accept-language=es`);
+    const d = await res.json();
+    if (d.display_name && !document.getElementById('dir-dir').value) {
+      document.getElementById('dir-dir').value = d.display_name.split(',').slice(0,3).join(',').trim();
+    }
+  } catch{}
+}
+
+// ═══════════════════════════════════════════════
+//  GEOCODING + AUTOCOMPLETE
+// ═══════════════════════════════════════════════
+window.onDirInput = () => {
+  clearTimeout(geocodeTimer);
+  const q = document.getElementById('dir-dir').value.trim();
+  if (q.length < 4) { document.getElementById('dir-autocomplete').style.display='none'; return; }
+  geocodeTimer = setTimeout(() => searchAddress(q), 500);
+};
+
+async function searchAddress(q) {
+  try {
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q+', Uruguay')}&limit=5&addressdetails=1`);
+    const data = await res.json();
+    const ac = document.getElementById('dir-autocomplete');
+    if (!data.length) { ac.innerHTML='<div class="autocomplete-hint">Sin resultados — probá con más detalle</div>'; ac.style.display=''; return; }
+    ac.innerHTML = data.map(r => `<div class="autocomplete-item" onclick="selectAddress('${escQ(r.display_name)}',${r.lat},${r.lon})">${r.display_name}</div>`).join('');
+    ac.style.display = '';
+  } catch {}
+}
+
+function selectAddress(name, lat, lng) {
+  document.getElementById('dir-dir').value = name;
+  document.getElementById('dir-autocomplete').style.display = 'none';
+  setDirCoords(parseFloat(lat), parseFloat(lng));
+}
+
+function escQ(s) { return s.replace(/'/g,"\\'"); }
+
+async function geocode(address) {
+  try {
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address+', Uruguay')}&limit=1`);
+    const d = await res.json();
+    if (d.length) return {lat:parseFloat(d[0].lat), lng:parseFloat(d[0].lon)};
+  } catch{}
+  return null;
+}
 
 // ═══════════════════════════════════════════════
 //  DASHBOARD
 // ═══════════════════════════════════════════════
-function renderDashboard() {
-  const totalDirs  = direcciones.length;
-  const totalRutas = rutas.length;
-  const m3Alerts   = rutas.filter(r => {
+function renderDash() {
+  const totalDirs = dirs.length;
+  const m3Alerts  = rutas.filter(r=>{const c=r.vehiculo==='Prensa'?CAP_PRENSA:CAP_FURGO;return dirs.filter(d=>d.rutaId===r.id).reduce((s,d)=>s+(parseFloat(d.m3)||0),0)>c;}).length;
+  const stpAlerts = rutas.filter(r=>dirs.filter(d=>d.rutaId===r.id).length>MAX_DIRS).length;
+  const pendTemps = temps.filter(t=>t.estado==='pendiente').length;
+
+  document.getElementById('stats').innerHTML=`
+    <div class="stat"><div class="stat-val">${rutas.length}</div><div class="stat-lbl">Rutas</div></div>
+    <div class="stat"><div class="stat-val">${totalDirs}</div><div class="stat-lbl">Clientes</div></div>
+    <div class="stat"><div class="stat-val" style="color:${m3Alerts||stpAlerts?'var(--red)':'var(--g7)'}">${m3Alerts+stpAlerts}</div><div class="stat-lbl">Alertas capacidad</div></div>
+    <div class="stat"><div class="stat-val" style="color:${pendTemps?'var(--amber)':'var(--g7)'}">${pendTemps}</div><div class="stat-lbl">Temporales pendientes</div></div>`;
+
+  document.getElementById('dash-cards').innerHTML = rutas.map(r=>{
+    const rd = dirs.filter(d=>d.rutaId===r.id);
+    const count = rd.length;
     const cap = r.vehiculo==='Prensa'?CAP_PRENSA:CAP_FURGO;
-    return direcciones.filter(d=>d.rutaId===r.id).reduce((s,d)=>s+(parseFloat(d.m3)||0),0) > cap;
-  }).length;
-  const stopAlerts = rutas.filter(r => direcciones.filter(d=>d.rutaId===r.id).length > MAX_DIRS).length;
-  const pendTemp   = temporales.filter(t=>t.estado==='pendiente').length;
-
-  document.getElementById('stats-row').innerHTML = `
-    <div class="stat-card"><div class="stat-value">${totalRutas}</div><div class="stat-label">Rutas</div></div>
-    <div class="stat-card"><div class="stat-value">${totalDirs}</div><div class="stat-label">Clientes</div></div>
-    <div class="stat-card"><div class="stat-value" style="color:${m3Alerts||stopAlerts?'var(--red)':'var(--green-700)'}">${m3Alerts+stopAlerts}</div><div class="stat-label">Alertas capacidad</div></div>
-    <div class="stat-card"><div class="stat-value" style="color:${pendTemp?'#f59e0b':'var(--green-700)'}">${pendTemp}</div><div class="stat-label">Paradas temporales</div></div>
-  `;
-
-  document.getElementById('dashboard-cards').innerHTML = rutas.map(r => {
-    const dirs   = direcciones.filter(d=>d.rutaId===r.id);
-    const count  = dirs.length;
-    const cap    = r.vehiculo==='Prensa'?CAP_PRENSA:CAP_FURGO;
-    const m3used = dirs.reduce((s,d)=>s+(parseFloat(d.m3)||0),0);
-    const hrs    = estimateHours(r.id);
-    const over   = count>MAX_DIRS, m3over=m3used>cap, timeOver=hrs>MAX_HRS;
+    const m3  = rd.reduce((s,d)=>s+(parseFloat(d.m3)||0),0);
+    const hrs = estHrs(r.id);
+    const maxHrs = Math.max(...Object.values(r.horasDia||{lun:6,mar:6,mie:6,jue:6,vie:6,sab:0,dom:0}));
+    const over=count>MAX_DIRS, m3over=m3>cap, timeOver=hrs>maxHrs;
     return `<div class="card">
-      <div class="card-header">
-        <div style="display:flex;align-items:center;gap:8px">
-          <div style="width:12px;height:12px;border-radius:50%;background:${r.color}"></div>
+      <div class="card-head">
+        <div style="display:flex;align-items:center;gap:7px">
+          <div style="width:11px;height:11px;border-radius:50%;background:${r.color}"></div>
           <div class="card-title">${r.nombre}</div>
-          <span style="font-size:11px;background:var(--slate-100);padding:1px 6px;border-radius:10px;color:var(--slate-500)">${r.vehiculo}</span>
+          <span class="chip chip-blue" style="font-size:9px">${r.vehiculo}</span>
         </div>
-        <div style="display:flex;gap:4px;flex-wrap:wrap">
-          ${over?'<span class="alert-chip">⚠ +100</span>':''}
-          ${m3over?'<span class="alert-chip">⚠ m³</span>':''}
-          ${timeOver?'<span class="alert-chip">⚠ +6h</span>':''}
+        <div class="flex-gap">
+          ${over?'<span class="chip chip-red">⚠ +100</span>':''}
+          ${m3over?'<span class="chip chip-red">⚠ m³</span>':''}
+          ${timeOver?'<span class="chip chip-amber">⚠ tiempo</span>':''}
         </div>
       </div>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;font-size:13px;margin-bottom:10px">
-        <div><div style="font-weight:700;font-size:18px;color:var(--green-700)">${count}</div><div class="text-muted text-sm">Paradas</div></div>
-        <div><div style="font-weight:700;font-size:18px;color:${m3over?'var(--red)':'var(--slate-900)'}">${m3used.toFixed(0)}m³</div><div class="text-muted text-sm">de ${cap}m³</div></div>
-        <div><div style="font-weight:700;font-size:18px;color:${timeOver?'var(--red)':'var(--slate-900)'}">${hrs.toFixed(1)}h</div><div class="text-muted text-sm">estimadas</div></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;font-size:12px;margin-bottom:10px">
+        <div><div style="font-weight:700;font-size:17px;color:var(--g7)">${count}</div><div class="muted text-sm">Paradas</div></div>
+        <div><div style="font-weight:700;font-size:17px;color:${m3over?'var(--red)':'inherit'}">${m3.toFixed(0)}m³</div><div class="muted text-sm">de ${cap}m³</div></div>
+        <div><div style="font-weight:700;font-size:17px;color:${timeOver?'var(--red)':'inherit'}">${hrs.toFixed(1)}h</div><div class="muted text-sm">estimadas</div></div>
       </div>
-      <div style="font-size:11px;color:var(--slate-500);margin-bottom:2px">Paradas ${count}/${MAX_DIRS}</div>
-      <div style="background:var(--slate-100);border-radius:4px;height:5px;margin-bottom:6px">
-        <div style="height:5px;background:${over?'var(--red)':'var(--green-500)'};width:${Math.min(count/MAX_DIRS*100,100)}%;border-radius:4px"></div>
+      <div class="pbar-wrap">
+        <div class="pbar-label">Paradas ${count}/${MAX_DIRS}</div>
+        <div class="pbar"><div class="pbar-fill" style="width:${Math.min(count/MAX_DIRS*100,100)}%;background:${over?'var(--red)':'var(--g5)'}"></div></div>
       </div>
-      <div style="font-size:11px;color:var(--slate-500);margin-bottom:2px">Capacidad m³ ${m3used.toFixed(1)}/${cap}</div>
-      <div style="background:var(--slate-100);border-radius:4px;height:5px">
-        <div style="height:5px;background:${m3over?'var(--red)':'#0277bd'};width:${Math.min(m3used/cap*100,100)}%;border-radius:4px"></div>
+      <div class="pbar-wrap">
+        <div class="pbar-label">Capacidad ${m3.toFixed(1)}/${cap} m³</div>
+        <div class="pbar"><div class="pbar-fill" style="width:${Math.min(m3/cap*100,100)}%;background:${m3over?'var(--red)':'var(--blue)'}"></div></div>
       </div>
+      ${r.chofer?`<div class="muted text-sm" style="margin-top:8px">👤 ${r.chofer} · ${r.matricula||'—'}</div>`:''}
     </div>`;
-  }).join('') || '<div class="card"><p class="text-muted">Sin rutas creadas.</p></div>';
+  }).join('')||'<div class="card"><p class="muted">Creá tu primera ruta para empezar.</p></div>';
 }
 
-function estimateHours(rutaId) {
-  const dirs = direcciones.filter(d=>d.rutaId===rutaId);
-  if (!dirs.length) return 0;
-  const stopMin    = dirs.reduce((s,d)=>s+(parseInt(d.parada)||5),0);
-  const travelMin  = Math.max(0, dirs.length-1) * 3; // ~3 min entre paradas
-  const plantMin   = 30; // ~15 min ida desde planta + 15 min vuelta
-  return (stopMin + travelMin + plantMin) / 60;
+function estHrs(rutaId) {
+  const rd = dirs.filter(d=>d.rutaId===rutaId);
+  if (!rd.length) return 0;
+  return (rd.reduce((s,d)=>s+(parseInt(d.parada)||5),0) + Math.max(0,rd.length-1)*3 + 30) / 60;
 }
 
 // ═══════════════════════════════════════════════
 //  DIRECCIONES
 // ═══════════════════════════════════════════════
-function renderDirecciones() {
-  const q  = document.getElementById('dir-filter')?.value?.toLowerCase()||'';
-  const fR = document.getElementById('dir-filter-ruta')?.value||'';
-  const list = direcciones
-    .filter(d => {
-      const ok = !q || JSON.stringify(d).toLowerCase().includes(q);
-      const rutaOk = !fR || d.rutaId===fR;
-      return ok && rutaOk;
-    })
-    .sort((a,b)=>(a.orden||999)-(b.orden||999));
-
+function renderDirs() {
+  const q  = (document.getElementById('dir-fil-q')?.value||'').toLowerCase();
+  const fR = document.getElementById('dir-fil-ruta')?.value||'';
   // Populate ruta filter
-  const fr = document.getElementById('dir-filter-ruta');
-  if (fr) fr.innerHTML = '<option value="">Todas las rutas</option>' +
-    rutas.map(r=>`<option value="${r.id}" ${r.id===fR?'selected':''}>${r.nombre}</option>`).join('');
-
-  const tbody = document.getElementById('tbody-direcciones');
-  if (!tbody) return;
-  tbody.innerHTML = list.map(d => {
-    const ruta = rutas.find(r=>r.id===d.rutaId);
-    const count = ruta ? direcciones.filter(x=>x.rutaId===ruta.id).length : 0;
-    const over = count > MAX_DIRS;
+  const frEl = document.getElementById('dir-fil-ruta');
+  if (frEl) {
+    const cur = frEl.value;
+    frEl.innerHTML = '<option value="">Todas las rutas</option>'+rutas.map(r=>`<option value="${r.id}"${r.id===cur?' selected':''}>${r.nombre}</option>`).join('');
+  }
+  const list = dirs.filter(d=>(!fR||d.rutaId===fR)&&(!q||JSON.stringify(d).toLowerCase().includes(q)))
+                   .sort((a,b)=>(a.orden||999)-(b.orden||999));
+  document.getElementById('dir-tbody').innerHTML = list.map(d=>{
+    const r=rutas.find(x=>x.id===d.rutaId);
     return `<tr>
-      <td><span style="display:inline-flex;align-items:center;gap:5px">
-        <span style="width:8px;height:8px;border-radius:50%;background:${ruta?.color||'#ccc'};display:inline-block"></span>
-        ${ruta?.nombre||'—'}${over?' <span class="alert-chip" style="font-size:10px">⚠</span>':''}
-      </span></td>
+      <td class="mono" style="font-size:10px">${d.codigo||'—'}</td>
+      <td><span style="display:inline-flex;align-items:center;gap:4px">
+        <span style="width:7px;height:7px;border-radius:50%;background:${r?.color||'#ccc'};display:inline-block"></span>
+        ${r?.nombre||'—'}</span></td>
       <td><b>${d.cliente}</b></td>
-      <td class="mono" style="font-size:11px">${d.direccion}</td>
-      <td>${d.vehiculo||'—'}</td>
-      <td class="mono">${d.matricula||'—'}</td>
-      <td>${d.chofer||'—'}</td>
+      <td class="hide-mobile" style="font-size:11px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.direccion}</td>
+      <td class="hide-mobile">${d.frecuencia||'—'}</td>
       <td>${d.turno||'—'}</td>
-      <td>${d.residuo||'—'}</td>
-      <td>${(d.m3||0)}m³</td>
-      <td>${d.parada||5}min</td>
+      <td class="hide-mobile">${d.residuo||'—'}</td>
+      <td>${d.m3||0}m³</td>
       <td>${d.orden||'—'}</td>
-      <td>
-        <div class="flex-gap">
-          <button class="btn btn-sm btn-secondary" onclick="editDireccion('${d.id}')">✏</button>
-          <button class="btn btn-sm btn-danger" onclick="deleteDireccion('${d.id}')">🗑</button>
-        </div>
-      </td>
+      <td><div class="flex-gap">
+        <button class="btn btn-sm btn-secondary" onclick="openDirModal('${d.id}')">✏</button>
+        <button class="btn btn-sm btn-danger" onclick="delDir('${d.id}')">🗑</button>
+      </div></td>
     </tr>`;
-  }).join('') || `<tr><td colspan="12" style="text-align:center;padding:24px;color:var(--slate-500)">Sin direcciones.</td></tr>`;
+  }).join('')||`<tr><td colspan="10" style="text-align:center;padding:20px;color:var(--s5)">Sin clientes.</td></tr>`;
 }
 
-window.openDireccionModal = (id=null) => {
-  document.getElementById('modal-dir-title').textContent = id?'Editar Dirección':'Nueva Dirección';
-  document.getElementById('dir-edit-id').value = id||'';
-  const sel = document.getElementById('dir-ruta');
-  sel.innerHTML = rutas.map(r=>`<option value="${r.id}">${r.nombre}</option>`).join('');
+window.openDirModal = (id=null) => {
+  document.getElementById('modal-dir-title').textContent = id?'Editar Cliente':'Nuevo Cliente';
+  sv('dir-id', id||'');
+  // Populate ruta select
+  document.getElementById('dir-ruta').innerHTML = rutas.map(r=>`<option value="${r.id}">${r.nombre} (${r.vehiculo})</option>`).join('');
   if (id) {
-    const d = direcciones.find(x=>x.id===id);
-    if (!d) return;
-    sel.value=d.rutaId; setV('dir-cliente',d.cliente); setV('dir-direccion',d.direccion);
-    setV('dir-vehiculo',d.vehiculo||'Furgón'); setV('dir-matricula',d.matricula||'');
-    setV('dir-chofer',d.chofer||''); setV('dir-cargador',d.cargador||'');
-    setV('dir-turno',d.turno||'Mañana'); setV('dir-residuo',d.residuo||'Comercial');
-    setV('dir-frecuencia',d.frecuencia||'');
-    setV('dir-parada',d.parada||5); setV('dir-m3',d.m3||0); setV('dir-orden',d.orden||999);
+    const d = dirs.find(x=>x.id===id); if(!d) return;
+    sv('dir-ruta',d.rutaId); onRutaChange();
+    sv('dir-cliente',d.cliente); sv('dir-dir',d.direccion);
+    sv('dir-turno',d.turno||'Mañana'); sv('dir-residuo',d.residuo||'Comercial');
+    sv('dir-frecuencia',d.frecuencia||''); sv('dir-m3',d.m3||0); sv('dir-parada',d.parada||5);
+    sv('dir-lat',d.lat||''); sv('dir-lng',d.lng||'');
+    document.getElementById('dir-coords-label').textContent = d.lat?`📍 ${d.lat.toFixed(5)}, ${d.lng.toFixed(5)}`:'Sin coordenadas';
   } else {
-    ['dir-cliente','dir-direccion','dir-matricula','dir-chofer','dir-cargador'].forEach(x=>setV(x,''));
-    setV('dir-vehiculo','Furgón'); setV('dir-turno','Mañana'); setV('dir-residuo','Comercial');
-    setV('dir-frecuencia','');
-    setV('dir-parada',5); setV('dir-m3',0); setV('dir-orden',direcciones.length+1);
+    ['dir-cliente','dir-dir','dir-lat','dir-lng'].forEach(x=>sv(x,''));
+    sv('dir-turno','Mañana'); sv('dir-residuo','Comercial'); sv('dir-frecuencia',''); sv('dir-m3',0); sv('dir-parada',5);
+    document.getElementById('dir-coords-label').textContent='Sin coordenadas';
+    onRutaChange();
   }
   openModal('modal-dir');
+  initMiniMap();
+  // If editing, show pin on mini map
+  if (id) {
+    const d=dirs.find(x=>x.id===id);
+    if (d?.lat) setTimeout(()=>setDirCoords(d.lat,d.lng), 200);
+  }
 };
 
-window.saveDireccion = async () => {
-  const cliente = gV('dir-cliente').trim();
-  const dirTxt  = gV('dir-direccion').trim();
-  const rutaId  = gV('dir-ruta');
-  if (!cliente||!dirTxt||!rutaId) { alert('Cliente, dirección y ruta son obligatorios.'); return; }
+window.onRutaChange = () => {
+  const rId = gv('dir-ruta');
+  const r = rutas.find(x=>x.id===rId);
+  sv('dir-vehiculo', r?.vehiculo||'—');
+};
+
+window.saveDir = async () => {
+  const cliente = gv('dir-cliente').trim();
+  const dirTxt  = gv('dir-dir').trim();
+  const rutaId  = gv('dir-ruta');
+  if (!cliente||!dirTxt||!rutaId){alert('Cliente, dirección y ruta son obligatorios.');return;}
   const btn = document.querySelector('#modal-dir .btn-primary');
-  btn.textContent='Geocodificando...'; btn.disabled=true;
-  const coords = await geocode(dirTxt);
-  btn.textContent='Reoptimizando ruta...'; 
-  const editId = gV('dir-edit-id');
+  btn.textContent='Guardando...'; btn.disabled=true;
+
+  let lat = parseFloat(gv('dir-lat'))||null;
+  let lng = parseFloat(gv('dir-lng'))||null;
+  // If no coords yet, try geocoding
+  if (!lat) {
+    const c = await geocode(dirTxt);
+    lat = c?.lat||null; lng = c?.lng||null;
+  }
+  const editId = gv('dir-id');
   const id = editId || `d_${Date.now()}`;
-  const obj = {
-    rutaId, cliente, direccion:dirTxt,
-    vehiculo:gV('dir-vehiculo'), matricula:gV('dir-matricula'),
-    chofer:gV('dir-chofer'), cargador:gV('dir-cargador'),
-    turno:gV('dir-turno'), residuo:gV('dir-residuo'),
-    parada:parseInt(gV('dir-parada'))||5,
-    m3:parseFloat(gV('dir-m3'))||0,
-    orden:999, // temporary — will be updated by reoptimize
-    lat:coords?.lat||null, lng:coords?.lng||null,
-    frecuencia: gV('dir-frecuencia')||'',
-    createdAt: editId ? (direcciones.find(x=>x.id===editId)?.createdAt||Date.now()) : Date.now()
-  };
-  await db.collection('direcciones').doc(id).set(obj);
-
-  // Reoptimize the route order
-  await reoptimizarRuta(rutaId);
-
+  const r = rutas.find(x=>x.id===rutaId);
+  const codigo = editId ? (dirs.find(x=>x.id===editId)?.codigo||genCod()) : genCod();
+  await db.collection('direcciones').doc(id).set({
+    rutaId, cliente, direccion:dirTxt, codigo,
+    vehiculo: r?.vehiculo||'Furgón',
+    turno:gv('dir-turno'), residuo:gv('dir-residuo'),
+    frecuencia:gv('dir-frecuencia'), m3:parseFloat(gv('dir-m3'))||0,
+    parada:parseInt(gv('dir-parada'))||5,
+    orden:999, lat, lng,
+    createdAt: editId?(dirs.find(x=>x.id===editId)?.createdAt||Date.now()):Date.now()
+  });
+  await reoptRuta(rutaId);
   btn.textContent='Guardar'; btn.disabled=false;
   closeModal('modal-dir');
   checkAlerts(rutaId);
 };
 
-window.editDireccion = id => window.openDireccionModal(id);
-window.deleteDireccion = async id => {
-  if (!confirm('¿Eliminar esta dirección?')) return;
-  const d = direcciones.find(x=>x.id===id);
-  const rutaId = d?.rutaId;
+window.delDir = async id => {
+  if (!confirm('¿Eliminar este cliente?')) return;
+  const d = dirs.find(x=>x.id===id);
   await db.collection('direcciones').doc(id).delete();
-  // Reoptimize after deletion too
-  if (rutaId) await reoptimizarRuta(rutaId);
+  if (d?.rutaId) await reoptRuta(d.rutaId);
 };
 
-// Reoptimize all stops in a route using nearest-neighbor from plant
-async function reoptimizarRuta(rutaId) {
-  // Get current stops for this route (including any just saved, from local state)
-  // We need to re-fetch since Firestore listener may not have updated yet
+function genCod() {
+  const n = dirs.length+1;
+  return 'ABG-'+String(n).padStart(4,'0');
+}
+
+function checkAlerts(rid) {
+  const r=rutas.find(x=>x.id===rid);
+  const count=dirs.filter(d=>d.rutaId===rid).length;
+  const cap=r?.vehiculo==='Prensa'?CAP_PRENSA:CAP_FURGO;
+  const m3=dirs.filter(d=>d.rutaId===rid).reduce((s,d)=>s+(parseFloat(d.m3)||0),0);
+  if(count>MAX_DIRS) alert(`⚠ La ruta "${r?.nombre}" supera las 100 paradas.`);
+  if(m3>cap) alert(`⚠ La ruta "${r?.nombre}" supera capacidad (${m3.toFixed(1)}/${cap}m³).`);
+}
+
+// ═══════════════════════════════════════════════
+//  REOPTIMIZAR RUTA
+// ═══════════════════════════════════════════════
+async function reoptRuta(rutaId) {
   const snap = await db.collection('direcciones').where('rutaId','==',rutaId).get();
-  const stops = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-
-  if (stops.length === 0) return;
-
-  // Separate stops with and without coordinates
-  const withCoords  = stops.filter(s => s.lat && s.lng);
-  const noCoords    = stops.filter(s => !s.lat || !s.lng);
-
-  // Sort with-coords stops using nearest-neighbor from plant
-  const sorted = nearestNeighborSort(withCoords.map(s => ({ ...s })));
-
-  // Append no-coords stops at the end (can't optimize without location)
-  const finalOrder = [...sorted, ...noCoords];
-
-  // Write updated orden back to Firestore in batch
+  const stops = snap.docs.map(d=>({id:d.id,...d.data()}));
+  if (!stops.length) return;
+  const withC = stops.filter(s=>s.lat&&s.lng);
+  const noC   = stops.filter(s=>!s.lat||!s.lng);
+  const sorted = nnSort(withC);
   const batch = db.batch();
-  finalOrder.forEach((s, i) => {
-    batch.update(db.collection('direcciones').doc(s.id), { orden: i + 1 });
-  });
+  [...sorted,...noC].forEach((s,i)=>batch.update(db.collection('direcciones').doc(s.id),{orden:i+1}));
   await batch.commit();
 }
 
-function checkAlerts(rutaId) {
-  const ruta = rutas.find(r=>r.id===rutaId);
-  const count = direcciones.filter(d=>d.rutaId===rutaId).length;
-  const cap   = ruta?.vehiculo==='Prensa'?CAP_PRENSA:CAP_FURGO;
-  const m3    = direcciones.filter(d=>d.rutaId===rutaId).reduce((s,d)=>s+(parseFloat(d.m3)||0),0);
-  const hrs   = estimateHours(rutaId);
-  if (count>MAX_DIRS) alert(`⚠ La ruta "${ruta?.nombre}" supera las 100 paradas (${count}).`);
-  if (m3>cap)         alert(`⚠ La ruta "${ruta?.nombre}" supera su capacidad de m³ (${m3.toFixed(1)}/${cap}).`);
-  if (hrs>MAX_HRS)    alert(`⚠ La ruta "${ruta?.nombre}" supera las 6 horas estimadas (${hrs.toFixed(1)}h).`);
+function nnSort(pts) {
+  if (pts.length<=1) return pts;
+  const res=[], used=new Set();
+  let last={lat:PLANTA.lat,lng:PLANTA.lng};
+  while(res.length<pts.length) {
+    let best=-1,bestD=Infinity;
+    pts.forEach((p,i)=>{ if(!used.has(i)){const d=d2(last,p);if(d<bestD){bestD=d;best=i;}} });
+    res.push(pts[best]); used.add(best); last=pts[best];
+  }
+  return res;
 }
-
-// ═══════════════════════════════════════════════
-//  PARADAS TEMPORALES
-// ═══════════════════════════════════════════════
-function renderTemporales() {
-  const hoy = new Date().toISOString().split('T')[0];
-  const list = [...temporales].sort((a,b)=>(a.fecha||'').localeCompare(b.fecha||''));
-  const tbody = document.getElementById('tbody-temporales');
-  if (!tbody) return;
-  tbody.innerHTML = list.map(t => {
-    const ruta = rutas.find(r=>r.id===t.rutaId);
-    const vencida = t.fecha && t.fecha < hoy && t.estado==='pendiente';
-    const color = t.estado==='completada'?'var(--green-600)':vencida?'var(--red)':'#f59e0b';
-    const label = t.estado==='completada'?'✅ Completada':vencida?'⚠ Vencida':'⏳ Pendiente';
-    return `<tr>
-      <td><span style="display:inline-flex;align-items:center;gap:5px">
-        <span style="width:8px;height:8px;border-radius:50%;background:${ruta?.color||'#ccc'};display:inline-block"></span>
-        ${ruta?.nombre||'—'}
-      </span></td>
-      <td><b>${t.cliente}</b></td>
-      <td style="font-size:12px">${t.direccion}</td>
-      <td>${t.fecha||'—'}</td>
-      <td>${t.frecuencia||'Una vez'}</td>
-      <td><span style="color:${color};font-weight:600;font-size:12px">${label}</span></td>
-      <td>
-        <div class="flex-gap">
-          ${t.estado!=='completada'?`<button class="btn btn-sm btn-primary" onclick="completarTemporal('${t.id}')">✔ Completar</button>`:''}
-          <button class="btn btn-sm btn-secondary" onclick="convertirPermanente('${t.id}')">📌 Fijar</button>
-          <button class="btn btn-sm btn-danger" onclick="deleteTemporal('${t.id}')">🗑</button>
-        </div>
-      </td>
-    </tr>`;
-  }).join('') || `<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--slate-500)">Sin paradas temporales.</td></tr>`;
-}
-
-window.openTemporalModal = () => {
-  const sel = document.getElementById('temp-ruta');
-  sel.innerHTML = rutas.map(r=>`<option value="${r.id}">${r.nombre}</option>`).join('');
-  ['temp-cliente','temp-direccion','temp-notas'].forEach(x=>setV(x,''));
-  setV('temp-fecha', new Date().toISOString().split('T')[0]);
-  setV('temp-frecuencia','Una vez');
-  openModal('modal-temporal');
+window.reoptRutaManual = async id => {
+  const r=rutas.find(x=>x.id===id);
+  if(!confirm(`¿Reoptimizar orden de "${r?.nombre}" desde la planta?`)) return;
+  await reoptRuta(id);
+  alert('✅ Ruta reoptimizada.');
 };
 
-window.saveTemporal = async () => {
-  const cliente = gV('temp-cliente').trim();
-  const dir     = gV('temp-direccion').trim();
-  const rutaId  = gV('temp-ruta');
-  if (!cliente||!dir) { alert('Cliente y dirección son obligatorios.'); return; }
-  const btn = document.querySelector('#modal-temporal .btn-primary');
-  btn.textContent='Geocodificando...'; btn.disabled=true;
-  const coords = await geocode(dir);
-  btn.textContent='Guardar'; btn.disabled=false;
-  const id = `t_${Date.now()}`;
-  await db.collection('temporales').doc(id).set({
-    rutaId, cliente, direccion:dir,
-    fecha: gV('temp-fecha'),
-    frecuencia: gV('temp-frecuencia'),
-    notas: gV('temp-notas'),
-    estado: 'pendiente',
-    lat: coords?.lat||null, lng: coords?.lng||null,
-    createdAt: Date.now()
+// ═══════════════════════════════════════════════
+//  TEMPORALES
+// ═══════════════════════════════════════════════
+function renderTemps() {
+  const hoy=new Date().toISOString().split('T')[0];
+  document.getElementById('temp-tbody').innerHTML = [...temps]
+    .sort((a,b)=>(a.fecha||'').localeCompare(b.fecha||''))
+    .map(t=>{
+      const r=rutas.find(x=>x.id===t.rutaId);
+      const venc=t.fecha&&t.fecha<hoy&&t.estado==='pendiente';
+      const color=t.estado==='completada'?'var(--g6)':venc?'var(--red)':'var(--amber)';
+      const label=t.estado==='completada'?'✅ Completada':venc?'⚠ Vencida':'⏳ Pendiente';
+      return `<tr>
+        <td><span style="display:inline-flex;align-items:center;gap:4px">
+          <span style="width:7px;height:7px;border-radius:50%;background:${r?.color||'#ccc'};display:inline-block"></span>${r?.nombre||'—'}
+        </span></td>
+        <td><b>${t.cliente}</b></td>
+        <td class="hide-mobile" style="font-size:11px">${t.direccion||'—'}</td>
+        <td>${t.fecha||'—'}</td>
+        <td>${t.frecuencia||'—'}</td>
+        <td><span style="color:${color};font-weight:700;font-size:11px">${label}</span></td>
+        <td><div class="flex-gap">
+          ${t.estado!=='completada'?`<button class="btn btn-sm btn-primary" onclick="completarTemp('${t.id}')">✔</button>`:''}
+          <button class="btn btn-sm btn-amber" onclick="fijarTemp('${t.id}')">📌</button>
+          <button class="btn btn-sm btn-danger" onclick="delTemp('${t.id}')">🗑</button>
+        </div></td>
+      </tr>`;
+    }).join('')||`<tr><td colspan="7" style="text-align:center;padding:18px;color:var(--s5)">Sin temporales.</td></tr>`;
+}
+
+window.openTempModal = () => {
+  document.getElementById('temp-ruta').innerHTML = rutas.map(r=>`<option value="${r.id}">${r.nombre}</option>`).join('');
+  onTempRutaChange();
+  ['temp-cliente-nuevo','temp-dir','temp-notas'].forEach(x=>sv(x,''));
+  sv('temp-fecha', new Date().toISOString().split('T')[0]);
+  sv('temp-freq','Una vez');
+  openModal('modal-temp');
+};
+
+window.onTempRutaChange = () => {
+  const rid=gv('temp-ruta');
+  const clientes=dirs.filter(d=>d.rutaId===rid);
+  document.getElementById('temp-cliente-sel').innerHTML=
+    '<option value="">— Seleccionar cliente existente —</option>'+
+    clientes.map(d=>`<option value="${d.id}">${d.cliente}</option>`).join('');
+};
+
+window.onTempClienteSel = () => {
+  const did=gv('temp-cliente-sel');
+  if (!did) return;
+  const d=dirs.find(x=>x.id===did);
+  if (d) { sv('temp-cliente-nuevo',''); sv('temp-dir',d.direccion); }
+};
+
+window.saveTemp = async () => {
+  const rutaId=gv('temp-ruta');
+  const selId=gv('temp-cliente-sel');
+  const nuevo=gv('temp-cliente-nuevo').trim();
+  let cliente='', dir='', lat=null, lng=null;
+  if (selId) {
+    const d=dirs.find(x=>x.id===selId);
+    cliente=d?.cliente||''; dir=d?.direccion||''; lat=d?.lat||null; lng=d?.lng||null;
+  } else if (nuevo) {
+    cliente=nuevo; dir=gv('temp-dir').trim();
+    if (dir) { const c=await geocode(dir); lat=c?.lat||null; lng=c?.lng||null; }
+  }
+  if (!cliente||!rutaId){alert('Seleccioná un cliente o ingresá uno nuevo.');return;}
+  await db.collection('temporales').doc(`t_${Date.now()}`).set({
+    rutaId, cliente, direccion:dir, lat, lng,
+    fecha:gv('temp-fecha'), frecuencia:gv('temp-freq'),
+    notas:gv('temp-notas'), estado:'pendiente', createdAt:Date.now()
   });
-  closeModal('modal-temporal');
+  closeModal('modal-temp');
 };
 
-window.completarTemporal = async id => {
-  const t = temporales.find(x=>x.id===id);
-  if (!t) return;
-  // If recurring, advance to next occurrence
-  let nextFecha = null;
-  if (t.frecuencia && t.frecuencia !== 'Una vez' && t.fecha) {
-    const d = new Date(t.fecha);
-    if (t.frecuencia==='Semanal') d.setDate(d.getDate()+7);
-    else if (t.frecuencia==='Quincenal') d.setDate(d.getDate()+14);
-    else if (t.frecuencia==='Mensual') d.setMonth(d.getMonth()+1);
-    nextFecha = d.toISOString().split('T')[0];
+window.completarTemp = async id => {
+  const t=temps.find(x=>x.id===id); if(!t) return;
+  let next=null;
+  if (t.frecuencia&&t.frecuencia!=='Una vez'&&t.fecha) {
+    const d=new Date(t.fecha);
+    if(t.frecuencia==='Semanal') d.setDate(d.getDate()+7);
+    else if(t.frecuencia==='Quincenal') d.setDate(d.getDate()+14);
+    else if(t.frecuencia==='Mensual') d.setMonth(d.getMonth()+1);
+    next=d.toISOString().split('T')[0];
   }
-  if (nextFecha) {
-    await db.collection('temporales').doc(id).set({...t, fecha:nextFecha, estado:'pendiente'});
-    alert(`✅ Completada. Próxima fecha: ${nextFecha}`);
-  } else {
-    await db.collection('temporales').doc(id).set({...t, estado:'completada'});
-  }
+  await db.collection('temporales').doc(id).set({...t, fecha:next||t.fecha, estado:next?'pendiente':'completada'});
+  if(next) alert(`✅ Completada. Próxima: ${next}`);
 };
 
-window.convertirPermanente = async id => {
-  const t = temporales.find(x=>x.id===id);
-  if (!t || !confirm(`¿Fijar "${t.cliente}" como cliente permanente en la ruta?`)) return;
-  const did = `d_${Date.now()}`;
+window.fijarTemp = async id => {
+  const t=temps.find(x=>x.id===id);
+  if(!t||!confirm(`¿Fijar "${t.cliente}" como cliente permanente?`)) return;
+  const did=`d_${Date.now()}`;
+  const r=rutas.find(x=>x.id===t.rutaId);
   await db.collection('direcciones').doc(did).set({
-    rutaId:t.rutaId, cliente:t.cliente, direccion:t.direccion,
-    vehiculo:'Furgón', matricula:'', chofer:'', cargador:'',
-    turno:'Mañana', residuo:'Comercial', parada:5, m3:0,
-    orden:direcciones.filter(d=>d.rutaId===t.rutaId).length+1,
-    lat:t.lat||null, lng:t.lng||null, createdAt:Date.now()
+    rutaId:t.rutaId, cliente:t.cliente, direccion:t.direccion||'',
+    vehiculo:r?.vehiculo||'Furgón', codigo:genCod(),
+    turno:'Mañana', residuo:'Comercial', frecuencia:'', parada:5, m3:0,
+    orden:999, lat:t.lat||null, lng:t.lng||null, createdAt:Date.now()
   });
   await db.collection('temporales').doc(id).delete();
-  alert('✅ Cliente fijado como permanente.');
+  await reoptRuta(t.rutaId);
+  alert('✅ Cliente fijado. Podés editar sus datos en la solapa Clientes.');
 };
 
-window.deleteTemporal = async id => {
-  if (!confirm('¿Eliminar esta parada temporal?')) return;
+window.delTemp = async id => {
+  if(!confirm('¿Eliminar esta parada temporal?')) return;
   await db.collection('temporales').doc(id).delete();
 };
 
@@ -698,89 +1470,94 @@ window.deleteTemporal = async id => {
 //  RUTAS
 // ═══════════════════════════════════════════════
 function renderRutas() {
-  const grid = document.getElementById('rutas-grid');
-  if (!grid) return;
-  grid.innerHTML = rutas.map(r => {
-    const dirs    = direcciones.filter(d=>d.rutaId===r.id);
-    const filtDirs = filtroDiaRutas ? dirs.filter(d=>matchesDia(d.frecuencia,filtroDiaRutas)) : dirs;
-    const count   = dirs.length;
-    const filtCount = filtDirs.length;
-    const cap     = r.vehiculo==='Prensa'?CAP_PRENSA:CAP_FURGO;
-    const m3used  = dirs.reduce((s,d)=>s+(parseFloat(d.m3)||0),0);
-    const hrs     = estimateHours(r.id);
-    const over=count>MAX_DIRS, m3over=m3used>cap, timeOver=hrs>MAX_HRS;
+  document.getElementById('rutas-grid').innerHTML = rutas.map(r=>{
+    const rd=dirs.filter(d=>d.rutaId===r.id);
+    const filD=filDiaRutas?rd.filter(d=>matchDia(d.frecuencia,filDiaRutas)):rd;
+    const count=rd.length, cap=r.vehiculo==='Prensa'?CAP_PRENSA:CAP_FURGO;
+    const m3=rd.reduce((s,d)=>s+(parseFloat(d.m3)||0),0);
+    const hrs=estHrs(r.id);
+    const over=count>MAX_DIRS, m3over=m3>cap;
+    // Build horario display
+    const hs=r.horasDia||{lun:6,mar:6,mie:6,jue:6,vie:6,sab:0,dom:0};
+    const horario=Object.entries(hs).map(([d,h])=>h>0?`${d.charAt(0).toUpperCase()+d.slice(1)}:${h}h`:'').filter(Boolean).join(' · ');
     return `<div class="card">
-      <div class="card-header">
-        <div style="display:flex;align-items:center;gap:8px">
-          <div style="width:14px;height:14px;border-radius:50%;background:${r.color}"></div>
+      <div class="card-head">
+        <div style="display:flex;align-items:center;gap:7px;min-width:0">
+          <div style="width:12px;height:12px;border-radius:50%;background:${r.color};flex-shrink:0"></div>
           <div class="card-title">${r.nombre}</div>
-          <span style="font-size:11px;background:var(--slate-100);padding:1px 6px;border-radius:10px;color:var(--slate-500)">${r.vehiculo}</span>
+          <span class="chip chip-blue" style="font-size:9px">${r.vehiculo}</span>
+          ${r.residuo?`<span class="chip chip-green" style="font-size:9px">${r.residuo}</span>`:''}
         </div>
         <div class="flex-gap">
-          <button class="btn btn-sm btn-secondary" onclick="reoptimizarRutaManual('${r.id}')" title="Reordenar paradas por cercanía desde la planta">🔄 Reoptimizar</button>
-          <button class="btn btn-sm btn-secondary" onclick="editRuta('${r.id}')">✏</button>
-          <button class="btn btn-sm btn-danger" onclick="deleteRuta('${r.id}')">🗑</button>
+          <button class="btn btn-sm btn-secondary" onclick="reoptRutaManual('${r.id}')" title="Reoptimizar orden">🔄</button>
+          <button class="btn btn-sm btn-secondary" onclick="openRutaModal('${r.id}')">✏</button>
+          <button class="btn btn-sm btn-danger" onclick="delRuta('${r.id}')">🗑</button>
         </div>
       </div>
-      <div style="font-size:13px;color:var(--slate-500);margin-bottom:8px">${r.tipo} · ${r.activa?'Activa':'Inactiva'}</div>
-      ${filtroDiaRutas ? `<div style="font-size:12px;font-weight:600;color:var(--green-700);margin-bottom:6px">📅 ${filtCount} paradas este día (de ${count} total)</div>` : ''}
-      ${over?'<div class="alert-chip" style="margin-bottom:5px">⚠ Supera 100 paradas</div>':''}
-      ${m3over?'<div class="alert-chip" style="margin-bottom:5px">⚠ Supera capacidad m³</div>':''}
-      ${timeOver?'<div class="alert-chip" style="margin-bottom:5px">⚠ Supera 6hs</div>':''}
-      <div style="font-size:11px;color:var(--slate-500);margin-bottom:2px">Paradas ${count}/${MAX_DIRS}</div>
-      <div style="background:var(--slate-100);border-radius:4px;height:5px;margin-bottom:6px">
-        <div style="height:5px;background:${over?'var(--red)':'var(--green-500)'};width:${Math.min(count/MAX_DIRS*100,100)}%;border-radius:4px"></div>
+      <div class="muted text-sm" style="margin-bottom:8px">
+        👤 ${r.chofer||'—'} · 🚛 ${r.matricula||'—'}
       </div>
-      <div style="font-size:11px;color:var(--slate-500);margin-bottom:2px">m³ ${m3used.toFixed(1)}/${cap}</div>
-      <div style="background:var(--slate-100);border-radius:4px;height:5px">
-        <div style="height:5px;background:${m3over?'var(--red)':'#0277bd'};width:${Math.min(m3used/cap*100,100)}%;border-radius:4px"></div>
+      ${filDiaRutas?`<div style="font-size:11px;font-weight:600;color:var(--g7);margin-bottom:6px">📅 ${filD.length} paradas este día (de ${count})</div>`:''}
+      ${over?'<div class="chip chip-red" style="margin-bottom:5px">⚠ Supera 100 paradas</div>':''}
+      ${m3over?'<div class="chip chip-red" style="margin-bottom:5px">⚠ Supera capacidad m³</div>':''}
+      <div class="pbar-wrap">
+        <div class="pbar-label">Paradas ${count}/${MAX_DIRS}</div>
+        <div class="pbar"><div class="pbar-fill" style="width:${Math.min(count/MAX_DIRS*100,100)}%;background:${over?'var(--red)':'var(--g5)'}"></div></div>
       </div>
-      <div class="text-sm text-muted" style="margin-top:6px">${hrs.toFixed(1)}h estimadas</div>
+      <div class="pbar-wrap">
+        <div class="pbar-label">${m3.toFixed(1)}/${cap} m³ · ${hrs.toFixed(1)}h est.</div>
+        <div class="pbar"><div class="pbar-fill" style="width:${Math.min(m3/cap*100,100)}%;background:${m3over?'var(--red)':'var(--blue)'}"></div></div>
+      </div>
+      ${horario?`<div class="muted text-sm" style="margin-top:7px">⏱ ${horario}</div>`:''}
     </div>`;
-  }).join('') || '<div class="card"><p class="text-muted">Sin rutas.</p></div>';
+  }).join('')||'<div class="card"><p class="muted">Creá tu primera ruta.</p></div>';
 }
 
 window.openRutaModal = (id=null) => {
-  document.getElementById('modal-ruta-title').textContent = id?'Editar Ruta':'Nueva Ruta';
-  document.getElementById('ruta-edit-id').value = id||'';
+  document.getElementById('modal-ruta-title').textContent=id?'Editar Ruta':'Nueva Ruta';
+  sv('ruta-id',id||'');
   if (id) {
-    const r = rutas.find(x=>x.id===id); if(!r) return;
-    setV('ruta-nombre',r.nombre); setV('ruta-tipo',r.tipo);
-    setV('ruta-color',r.color||'#4caf50'); setV('ruta-vehiculo',r.vehiculo||'Furgón');
-    setV('ruta-activa',r.activa?'SI':'NO');
+    const r=rutas.find(x=>x.id===id); if(!r) return;
+    sv('ruta-nombre',r.nombre); sv('ruta-residuo',r.residuo||'');
+    sv('ruta-vehiculo',r.vehiculo||'Furgón'); sv('ruta-matricula',r.matricula||'');
+    sv('ruta-chofer',r.chofer||''); sv('ruta-cargador',r.cargador||'');
+    sv('ruta-color',r.color||'#4caf50'); sv('ruta-activa',r.activa?'true':'false');
+    const hs=r.horasDia||{lun:6,mar:6,mie:6,jue:6,vie:6,sab:0,dom:0};
+    sv('hs-lun',hs.lun||6);sv('hs-mar',hs.mar||6);sv('hs-mie',hs.mie||6);
+    sv('hs-jue',hs.jue||6);sv('hs-vie',hs.vie||6);sv('hs-sab',hs.sab||0);sv('hs-dom',hs.dom||0);
   } else {
-    setV('ruta-nombre',''); setV('ruta-tipo','Comercial');
-    setV('ruta-color','#4caf50'); setV('ruta-vehiculo','Furgón'); setV('ruta-activa','SI');
+    sv('ruta-nombre','');sv('ruta-residuo','');sv('ruta-vehiculo','Furgón');
+    sv('ruta-matricula','');sv('ruta-chofer','');sv('ruta-cargador','');
+    sv('ruta-color','#4caf50');sv('ruta-activa','true');
+    ['hs-lun','hs-mar','hs-mie','hs-jue','hs-vie'].forEach(x=>sv(x,6));
+    ['hs-sab','hs-dom'].forEach(x=>sv(x,0));
   }
   openModal('modal-ruta');
 };
 
 window.saveRuta = async () => {
-  const nombre = gV('ruta-nombre').trim();
-  if (!nombre) { alert('El nombre es obligatorio.'); return; }
-  const editId = gV('ruta-edit-id');
-  const id = editId || `r_${Date.now()}`;
+  const nombre=gv('ruta-nombre').trim();
+  if(!nombre){alert('El nombre es obligatorio.');return;}
+  const editId=gv('ruta-id');
+  const id=editId||`r_${Date.now()}`;
   await db.collection('rutas').doc(id).set({
-    nombre, tipo:gV('ruta-tipo'), color:gV('ruta-color'),
-    vehiculo:gV('ruta-vehiculo'), activa:gV('ruta-activa')==='SI'
+    nombre, residuo:gv('ruta-residuo'), vehiculo:gv('ruta-vehiculo'),
+    matricula:gv('ruta-matricula'), chofer:gv('ruta-chofer'), cargador:gv('ruta-cargador'),
+    color:gv('ruta-color'), activa:gv('ruta-activa')==='true',
+    horasDia:{
+      lun:parseFloat(gv('hs-lun'))||0, mar:parseFloat(gv('hs-mar'))||0,
+      mie:parseFloat(gv('hs-mie'))||0, jue:parseFloat(gv('hs-jue'))||0,
+      vie:parseFloat(gv('hs-vie'))||0, sab:parseFloat(gv('hs-sab'))||0,
+      dom:parseFloat(gv('hs-dom'))||0,
+    }
   });
   closeModal('modal-ruta');
 };
 
-window.editRuta = id => window.openRutaModal(id);
-
-window.reoptimizarRutaManual = async id => {
-  const r = rutas.find(x=>x.id===id);
-  if (!confirm(`¿Reoptimizar el orden de paradas de "${r?.nombre}" partiendo desde la planta?\n\nEsto reorganiza todas las paradas en el orden más eficiente.`)) return;
-  await reoptimizarRuta(id);
-  alert(`✅ Ruta "${r?.nombre}" reoptimizada correctamente.`);
-  renderRutas();
-};
-window.deleteRuta = async id => {
-  const r = rutas.find(x=>x.id===id);
-  const hasDirs = direcciones.some(d=>d.rutaId===id);
-  if (hasDirs && !confirm(`La ruta "${r?.nombre}" tiene clientes. ¿Eliminar igual?`)) return;
-  if (!hasDirs && !confirm(`¿Eliminar "${r?.nombre}"?`)) return;
+window.delRuta = async id => {
+  const r=rutas.find(x=>x.id===id);
+  if(dirs.some(d=>d.rutaId===id)&&!confirm(`"${r?.nombre}" tiene clientes. ¿Eliminar igual?`)) return;
+  if(!dirs.some(d=>d.rutaId===id)&&!confirm(`¿Eliminar "${r?.nombre}"?`)) return;
   await db.collection('rutas').doc(id).delete();
 };
 
@@ -788,1160 +1565,305 @@ window.deleteRuta = async id => {
 //  IMPORTAR + K-MEANS
 // ═══════════════════════════════════════════════
 window.descargarTemplate = () => {
-  const wb_t = XLSX.utils.book_new();
-
-  // Sheet 1: Clientes
-  const data = [
-    ['nombre *','direccion *','m3_promedio *','frecuencia *','tipo_residuo','vehiculo_pref','chofer','cargador','matricula','turno','parada_max_min','notas'],
-    ['Empresa ABC S.A.','Av. 18 de Julio 1234, Montevideo','3.5','Lunes a Viernes','Comercial','Prensa','Juan Pérez','Carlos García','STP-1234','Mañana','5','Ejemplo - borrá esta fila'],
-    ['Hospital Clínico','Bulevar España 2827, Montevideo','8.0','Lunes Miércoles y Viernes','Hospitalario','Furgón','Ana Rodríguez','Luis Méndez','STO-5678','Mañana','10','Ejemplo - borrá esta fila'],
-    ['Supermercado Central','Av. Luis Batlle Berres 3450, Montevideo','12.0','3 veces por semana','Comercial','Prensa','','','','Tarde','5','Ejemplo - borrá esta fila'],
-    ['Taller Metalúrgico','Camino Maldonado 4521, Montevideo','6.5','Solo lunes y viernes','Industrial','Auto-asignar','','','','Mañana','5','Ejemplo - borrá esta fila'],
-  ];
-  const ws_t = XLSX.utils.aoa_to_sheet(data);
-  ws_t['!cols'] = [{wch:30},{wch:42},{wch:14},{wch:28},{wch:16},{wch:14},{wch:18},{wch:18},{wch:12},{wch:10},{wch:14},{wch:24}];
-  XLSX.utils.book_append_sheet(wb_t, ws_t, 'Clientes');
-
-  // Sheet 2: Frecuencias válidas
-  const freqs = [
-    ['Frecuencia (copiar exacto)','Descripción','Visitas/semana aprox.'],
-    ['Todos los días','Lu Ma Mi Ju Vi Sa Do','7'],
-    ['Lunes a Viernes','Lu Ma Mi Ju Vi','5'],
-    ['Lunes Miércoles y Viernes','Lu Mi Vi','3'],
-    ['Martes y Jueves','Ma Ju','2'],
-    ['Lunes y Viernes','Lu Vi','2'],
-    ['Solo los lunes','Lunes','1'],
-    ['Solo los martes','Martes','1'],
-    ['Solo los miércoles','Miércoles','1'],
-    ['Solo los jueves','Jueves','1'],
-    ['Solo los viernes','Viernes','1'],
-    ['3 veces por semana','Días a definir','3'],
-    ['2 veces por semana','Días a definir','2'],
-    ['Semanal','Un día fijo por semana','1'],
-    ['Quincenal','Cada 2 semanas','0.5'],
-    ['Mensual','Una vez al mes','0.25'],
-  ];
-  const ws_f = XLSX.utils.aoa_to_sheet(freqs);
-  ws_f['!cols'] = [{wch:32},{wch:30},{wch:20}];
-  XLSX.utils.book_append_sheet(wb_t, ws_f, 'Frecuencias válidas');
-
-  // Sheet 3: Instrucciones
-  const inst = [
-    ['Campo','Descripción'],
-    ['nombre *','Nombre del cliente o empresa. Obligatorio.'],
-    ['direccion *','Dirección completa: Calle + número + ciudad. Ej: "Av. 18 de Julio 1234, Montevideo". Obligatorio.'],
-    ['m3_promedio *','Metros cúbicos POR VISITA (no mensual). Si genera 10m³/mes y va 5 veces/semana (20 visitas/mes) → 10/20 = 0.5. Obligatorio.'],
-    ['frecuencia *','Copiá exactamente una opción de la hoja "Frecuencias válidas". Obligatorio.'],
-    ['tipo_residuo','Comercial / Hospitalario / Industrial / Reciclados / Especial. Si se omite se asume Comercial.'],
-    ['vehiculo_pref','Furgón (máx 30m³) / Prensa (máx 90m³) / Auto-asignar. Si se omite se usa Auto-asignar.'],
-    ['chofer','Nombre del chofer asignado. Opcional.'],
-    ['cargador','Nombre del cargador. Opcional.'],
-    ['matricula','Matrícula del vehículo. Opcional.'],
-    ['turno','Mañana / Tarde / Noche. Si se omite se usa Mañana.'],
-    ['parada_max_min','Minutos máximos de parada por visita. Por defecto: 5.'],
-    ['notas','Observaciones adicionales. Opcional.'],
-    ['',''],
-    ['IMPORTANTE','Borrá las filas de ejemplo antes de importar, o la app las importará también.'],
-    ['IMPORTANTE','Al importar la app geocodifica cada dirección automáticamente para el mapa.'],
-    ['IMPORTANTE','Con K-Means auto la app agrupa los clientes en rutas por zona geográfica respetando capacidad m³.'],
-  ];
-  const ws_i = XLSX.utils.aoa_to_sheet(inst);
-  ws_i['!cols'] = [{wch:18},{wch:80}];
-  XLSX.utils.book_append_sheet(wb_t, ws_i, 'Instrucciones');
-
-  XLSX.writeFile(wb_t, 'Aborgama_Template_Importacion.xlsx');
+  const wb=XLSX.utils.book_new();
+  const ws=XLSX.utils.aoa_to_sheet([
+    ['nombre *','direccion *','m3_promedio *','frecuencia *','tipo_residuo','vehiculo_pref','turno','parada_max_min','notas'],
+    ['Empresa ABC','Av. 18 de Julio 1234, Montevideo','3.5','Lunes a Viernes','Comercial','Prensa','Mañana','5','Ejemplo'],
+    ['Hospital XYZ','Bulevar España 567, Montevideo','8','Lunes Miércoles y Viernes','Hospitalario','Furgón','Mañana','10','Ejemplo'],
+  ]);
+  ws['!cols']=[{wch:28},{wch:42},{wch:14},{wch:28},{wch:16},{wch:14},{wch:10},{wch:14},{wch:22}];
+  XLSX.utils.book_append_sheet(wb,ws,'Clientes');
+  const ws2=XLSX.utils.aoa_to_sheet([
+    ['Frecuencia','Días'],
+    ['Todos los días','Lu-Ma-Mi-Ju-Vi-Sa-Do'],['Lunes a Viernes','Lu-Ma-Mi-Ju-Vi'],
+    ['Lunes Miércoles y Viernes','Lu-Mi-Vi'],['Martes y Jueves','Ma-Ju'],
+    ['Lunes y Viernes','Lu-Vi'],['Solo los lunes','Lu'],['Solo los martes','Ma'],
+    ['Solo los miércoles','Mi'],['Solo los jueves','Ju'],['Solo los viernes','Vi'],
+    ['3 veces por semana','Días a definir'],['2 veces por semana','Días a definir'],
+    ['Semanal','1 día/semana'],['Quincenal','Cada 2 semanas'],['Mensual','1 vez/mes'],
+  ]);
+  XLSX.utils.book_append_sheet(wb,ws2,'Frecuencias');
+  XLSX.writeFile(wb,'Aborgama_Template.xlsx');
 };
 
 function renderImportar() {
-  const sel = document.getElementById('import-ruta-sel');
-  if (!sel) return;
-  sel.innerHTML = '<option value="">— K-means auto (recomendado) —</option>' +
+  const sel=document.getElementById('imp-ruta-sel');
+  if(!sel) return;
+  sel.innerHTML='<option value="">— K-Means auto (recomendado) —</option>'+
     rutas.map(r=>`<option value="${r.id}">${r.nombre} (${r.vehiculo})</option>`).join('');
 }
 
 window.previewImport = input => {
-  const file = input.files[0];
-  if (!file) return;
-  document.getElementById('import-filename').textContent = file.name;
-  const reader = new FileReader();
-  const isExcel = file.name.match(/\.xlsx?$/i);
-
+  const file=input.files[0]; if(!file) return;
+  document.getElementById('imp-filename').textContent=file.name;
+  const reader=new FileReader();
+  const isXL=file.name.match(/\.xlsx?$/i);
   reader.onload = e => {
-    if (isExcel) {
-      // Parse Excel with SheetJS
-      const wb_in = XLSX.read(e.target.result, {type:'array'});
-      const ws_in = wb_in.Sheets[wb_in.SheetNames[0]];
-      // Find header row (look for 'nombre' column)
-      const raw = XLSX.utils.sheet_to_json(ws_in, {header:1, defval:''});
-      let headerRow = -1;
-      for (let i=0;i<raw.length;i++) {
-        const rowLower = raw[i].map(c=>String(c).toLowerCase().trim());
-        if (rowLower.includes('nombre') || rowLower.includes('direccion')) { headerRow=i; break; }
+    if(isXL){
+      const wb=XLSX.read(e.target.result,{type:'array'});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const raw=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+      let hRow=-1;
+      for(let i=0;i<raw.length;i++){
+        const r=raw[i].map(c=>String(c).toLowerCase().trim());
+        if(r.includes('nombre')||r.includes('direccion')){hRow=i;break;}
       }
-      if (headerRow < 0) { alert('No se encontraron encabezados válidos. Verificá que el archivo tenga columnas "nombre" y "direccion".'); return; }
-      const headers = raw[headerRow].map(c=>String(c).toLowerCase().trim().replace(/[*\s]/g,'_').replace(/__+/g,'_').replace(/_$/,''));
-      importRows = raw.slice(headerRow+1)
-        .filter(row => row.some(c=>c!==''))
-        .map(row => {
-          const obj = {};
-          headers.forEach((h,i) => { obj[h] = String(row[i]||'').trim(); });
-          return obj;
-        })
-        .filter(r => r.nombre || r.cliente || r.direccion);
+      if(hRow<0){alert('No se encontraron encabezados.');return;}
+      const hdrs=raw[hRow].map(c=>String(c).toLowerCase().trim().replace(/[* ]/g,'_').replace(/__+/g,'_').replace(/_$/,''));
+      importRows=raw.slice(hRow+1).filter(r=>r.some(c=>c!=='')).map(r=>{const o={};hdrs.forEach((h,i)=>{o[h]=String(r[i]||'').trim();});return o;}).filter(r=>r.nombre||r.cliente);
     } else {
-      importRows = parseCSV(e.target.result);
+      importRows=parseCSV(e.target.result);
     }
-
-    document.getElementById('import-preview-title').textContent = `${importRows.length} registros encontrados:`;
-    document.getElementById('import-count-btn').textContent = `(${importRows.length})`;
-    const cols = ['nombre','direccion','m3_promedio','frecuencia','tipo_residuo'];
-    document.getElementById('import-preview-head').innerHTML = cols.map(c=>`<th>${c}</th>`).join('');
-    document.getElementById('import-preview-body').innerHTML = importRows.slice(0,8).map(r=>{
-      const m3 = r.m3_promedio || r.m3 || '—';
-      const freq = r.frecuencia || '—';
-      const res = r.tipo_residuo || r.residuo || '—';
-      return `<tr>
-        <td>${r.nombre||r.cliente||'—'}</td>
-        <td style="font-size:11px">${r.direccion||'—'}</td>
-        <td>${m3}</td><td>${freq}</td><td>${res}</td>
-      </tr>`;
-    }).join('');
-    document.getElementById('import-preview').style.display='';
-    document.getElementById('import-result').innerHTML='';
+    document.getElementById('imp-prev-title').textContent=`${importRows.length} registros encontrados:`;
+    document.getElementById('imp-count').textContent=`(${importRows.length})`;
+    const cols=['nombre','direccion','m3_promedio','frecuencia','tipo_residuo'];
+    document.getElementById('imp-prev-head').innerHTML=cols.map(c=>`<th>${c}</th>`).join('');
+    document.getElementById('imp-prev-body').innerHTML=importRows.slice(0,6).map(r=>`<tr>${cols.map(c=>`<td>${r[c]||r['m3']||'—'}</td>`).join('')}</tr>`).join('');
+    document.getElementById('imp-preview').style.display='';
+    document.getElementById('imp-result').innerHTML='';
     renderImportar();
   };
-
-  if (isExcel) reader.readAsArrayBuffer(file);
-  else reader.readAsText(file,'UTF-8');
+  if(isXL) reader.readAsArrayBuffer(file); else reader.readAsText(file,'UTF-8');
 };
 
-function kmeans(points, k, maxIter=50) {
-  if (!points.length || k<=0) return [];
-  k = Math.min(k, points.length);
-  // Init centroids with k-means++ seeding, biased toward plant
-  let centroids = [{ lat: PLANTA.lat, lng: PLANTA.lng }];
-  while (centroids.length < k) {
-    const dists = points.map(p => Math.min(...centroids.map(c => dist2(p,c))));
-    const sum = dists.reduce((a,b)=>a+b,0);
-    if (sum === 0) { centroids.push(points[centroids.length % points.length]); continue; }
-    let r = Math.random() * sum;
-    let added = false;
-    for (let i=0; i<points.length; i++) {
-      r -= dists[i];
-      if (r <= 0) { centroids.push(points[i]); added = true; break; }
-    }
-    if (!added) centroids.push(points[points.length-1]);
+function kmeans(pts,k,maxIter=60){
+  if(!pts.length||k<=0) return [];
+  k=Math.min(k,pts.length);
+  let cents=[{lat:PLANTA.lat,lng:PLANTA.lng}];
+  while(cents.length<k){
+    const ds=pts.map(p=>Math.min(...cents.map(c=>d2(p,c))));
+    const sum=ds.reduce((a,b)=>a+b,0);
+    if(sum===0){cents.push(pts[cents.length%pts.length]);continue;}
+    let r=Math.random()*sum,added=false;
+    for(let i=0;i<pts.length;i++){r-=ds[i];if(r<=0){cents.push(pts[i]);added=true;break;}}
+    if(!added) cents.push(pts[pts.length-1]);
   }
-
-  let assignments = new Array(points.length).fill(0);
-  for (let iter=0; iter<maxIter; iter++) {
-    // Assign
-    let changed = false;
-    points.forEach((p,i) => {
-      const nearest = centroids.reduce((best,c,j) => dist2(p,c)<dist2(p,centroids[best])?j:best, 0);
-      if (nearest !== assignments[i]) { assignments[i]=nearest; changed=true; }
-    });
-    if (!changed) break;
-    // Update centroids
-    centroids = centroids.map((_,j) => {
-      const group = points.filter((_,i)=>assignments[i]===j);
-      if (!group.length) return centroids[j];
-      return { lat: group.reduce((s,p)=>s+p.lat,0)/group.length, lng: group.reduce((s,p)=>s+p.lng,0)/group.length };
-    });
+  let asgn=new Array(pts.length).fill(0);
+  for(let it=0;it<maxIter;it++){
+    let chg=false;
+    pts.forEach((p,i)=>{const n=cents.reduce((b,c,j)=>d2(p,c)<d2(p,cents[b])?j:b,0);if(n!==asgn[i]){asgn[i]=n;chg=true;}});
+    if(!chg) break;
+    cents=cents.map((_,j)=>{const g=pts.filter((_,i)=>asgn[i]===j);return g.length?{lat:g.reduce((s,p)=>s+p.lat,0)/g.length,lng:g.reduce((s,p)=>s+p.lng,0)/g.length}:cents[j];});
   }
-  return assignments;
+  return asgn;
 }
 
-function dist2(a,b) { return Math.pow(a.lat-b.lat,2)+Math.pow(a.lng-b.lng,2); }
-
-// Nearest-neighbor sort starting from the plant
-function nearestNeighborSort(points) {
-  if (points.length <= 1) return points;
-  const result = [], used = new Set();
-  // Start from plant
-  let last = { lat: PLANTA.lat, lng: PLANTA.lng };
-  while (result.length < points.length) {
-    let best = -1, bestD = Infinity;
-    points.forEach((p, i) => {
-      if (!used.has(i)) {
-        const d = dist2(last, p);
-        if (d < bestD) { bestD = d; best = i; }
-      }
-    });
-    result.push(points[best]);
-    used.add(best);
-    last = points[best];
-  }
-  return result;
-}
+function d2(a,b){return(a.lat-b.lat)**2+(a.lng-b.lng)**2;}
 
 window.ejecutarImport = async () => {
-  if (!importRows.length) { alert('Cargá un archivo primero.'); return; }
-  const rutaFija = document.getElementById('import-ruta-sel').value;
-  const btn = document.querySelector('#panel-importar .btn-primary');
+  if(!importRows.length){alert('Cargá un archivo primero.');return;}
+  const rutaFija=document.getElementById('imp-ruta-sel')?.value||'';
+  const btn=document.querySelector('#panel-importar .btn-primary');
   btn.disabled=true;
-  const resultEl = document.getElementById('import-result');
-  resultEl.innerHTML = '<div style="color:var(--slate-500);font-size:13px">⏳ Geocodificando direcciones...</div>';
-
-  // Step 1: geocode all
-  const geocoded = [];
-  for (const row of importRows) {
-    const nombre = (row.nombre||row.cliente||'').trim();
-    const dir    = (row.direccion||'').trim();
-    const m3Val  = parseFloat(row.m3_promedio||row.m3||0) || 0;
-    const residuo = row.tipo_residuo||row.residuo||row.tipo||'Comercial';
-    const frecuencia = row.frecuencia||row.frecuencia_visita||'';
-    const vehiculoPref = row.vehiculo_pref||row.vehiculo||'';
-    if (!nombre||!dir) continue;
-    const coords = await geocode(dir);
-    geocoded.push({ ...row, nombre, dir, m3:m3Val, residuo, frecuencia, vehiculoPref, lat:coords?.lat||null, lng:coords?.lng||null });
-    await new Promise(r=>setTimeout(r,250));
+  document.getElementById('imp-result').innerHTML='<div class="muted text-sm">⏳ Geocodificando...</div>';
+  const geo=[];
+  for(const row of importRows){
+    const nombre=(row.nombre||row.cliente||'').trim();
+    const dir=(row.direccion||'').trim();
+    if(!nombre||!dir) continue;
+    const m3v=parseFloat(row.m3_promedio||row.m3||0)||0;
+    const residuo=row.tipo_residuo||row.residuo||'Comercial';
+    const frecuencia=row.frecuencia||'';
+    const turno=row.turno||'Mañana';
+    const parada=parseInt(row.parada_max_min||row.parada||5)||5;
+    const c=await geocode(dir);
+    geo.push({nombre,dir,m3:m3v,residuo:cap1(residuo),frecuencia,turno,parada,lat:c?.lat||null,lng:c?.lng||null});
+    await new Promise(r=>setTimeout(r,280));
   }
-
-  resultEl.innerHTML = '<div style="color:var(--slate-500);font-size:13px">⚙️ Aplicando K-Means...</div>';
-
-  // Step 2: assign routes
-  let rutaAsignada = {};
-
-  if (!rutaFija) {
-    // K-Means: only geocoded points
-    const withCoords = geocoded.filter(g=>g.lat);
-    const k = Math.min(rutas.length, withCoords.length);
-    if (withCoords.length > 0 && k > 0) {
-      const assignments = kmeans(withCoords.map(g=>({lat:g.lat,lng:g.lng})), k);
-      // Map cluster → ruta (respecting m3 capacity)
-      // Sort rutas by capacity desc
-      const rutasSorted = [...rutas].sort((a,b) => (b.vehiculo==='Prensa'?CAP_PRENSA:CAP_FURGO)-(a.vehiculo==='Prensa'?CAP_PRENSA:CAP_FURGO));
-      const clusterMap = {}; // cluster index → rutaId
-      const rutaM3 = {}; rutas.forEach(r=>{ rutaM3[r.id]=direcciones.filter(d=>d.rutaId===r.id).reduce((s,d)=>s+(parseFloat(d.m3)||0),0); });
-      const rutaCount = {}; rutas.forEach(r=>{ rutaCount[r.id]=direcciones.filter(d=>d.rutaId===r.id).length; });
-
-      // Group by cluster and compute total m3
-      const clusterM3 = {};
-      withCoords.forEach((g,i)=>{ const c=assignments[i]; clusterM3[c]=(clusterM3[c]||0)+(parseFloat(g.m3)||0); });
-
-      Object.keys(clusterM3).sort((a,b)=>clusterM3[b]-clusterM3[a]).forEach(c => {
-        const best = rutasSorted.find(r => {
-          if (usedRutas.has(r.id)) return false;
-          const cap = r.vehiculo==='Prensa'?CAP_PRENSA:CAP_FURGO;
-          return rutaM3[r.id]+clusterM3[c] <= cap && rutaCount[r.id]+withCoords.filter((_,i)=>assignments[i]==c).length <= MAX_DIRS;
-        }) || rutasSorted.find(r=>!usedRutas.has(r.id)) || rutasSorted[0];
-        clusterMap[c] = best.id;
-        usedRutas.add(best.id);
-        rutaM3[best.id] = (rutaM3[best.id]||0)+clusterM3[c];
-        rutaCount[best.id] = (rutaCount[best.id]||0)+withCoords.filter((_,i2)=>assignments[i2]==c).length;
+  document.getElementById('imp-result').innerHTML='<div class="muted text-sm">⚙️ Aplicando K-Means...</div>';
+  const byRuta={};
+  if(!rutaFija){
+    const wC=geo.filter(g=>g.lat);
+    const k=Math.min(rutas.length,wC.length);
+    if(wC.length>0&&k>0){
+      const asgn=kmeans(wC.map(g=>({lat:g.lat,lng:g.lng})),k);
+      const rutasSorted=[...rutas].sort((a,b)=>(b.vehiculo==='Prensa'?CAP_PRENSA:CAP_FURGO)-(a.vehiculo==='Prensa'?CAP_PRENSA:CAP_FURGO));
+      const clM3={};
+      wC.forEach((g,i)=>{const c=asgn[i];clM3[c]=(clM3[c]||0)+g.m3;});
+      const cMap={},usedR=new Set();
+      const rM3={},rCnt={};
+      rutas.forEach(r=>{rM3[r.id]=dirs.filter(d=>d.rutaId===r.id).reduce((s,d)=>s+(parseFloat(d.m3)||0),0);rCnt[r.id]=dirs.filter(d=>d.rutaId===r.id).length;});
+      // Match residuo type too
+      Object.keys(clM3).sort((a,b)=>clM3[b]-clM3[a]).forEach(c=>{
+        const clItems=wC.filter((_,i)=>asgn[i]==c);
+        const mainResiduo=clItems[0]?.residuo||'';
+        const best=rutasSorted.find(r=>{
+          if(usedR.has(r.id)) return false;
+          const cap=r.vehiculo==='Prensa'?CAP_PRENSA:CAP_FURGO;
+          const residuoMatch=!r.residuo||!mainResiduo||r.residuo===mainResiduo||r.residuo==='Mixto'||r.residuo==='';
+          return rM3[r.id]+clM3[c]<=cap&&rCnt[r.id]+clItems.length<=MAX_DIRS&&residuoMatch;
+        })||rutasSorted.find(r=>!usedR.has(r.id))||rutasSorted[0];
+        cMap[c]=best.id; usedR.add(best.id);
+        rM3[best.id]=(rM3[best.id]||0)+clM3[c];
+        rCnt[best.id]=(rCnt[best.id]||0)+clItems.length;
       });
-
-      withCoords.forEach((g,i)=>{ rutaAsignada[g.dir+g.nombre]=clusterMap[assignments[i]]||rutas[0]?.id; });
+      wC.forEach((g,i)=>{const rid=cMap[asgn[i]]||rutas[0]?.id;if(!byRuta[rid])byRuta[rid]=[];byRuta[rid].push(g);});
     }
+    geo.filter(g=>!g.lat).forEach(g=>{const rid=rutas[0]?.id;if(rid){if(!byRuta[rid])byRuta[rid]=[];byRuta[rid].push(g);}});
+  } else {
+    byRuta[rutaFija]=geo;
   }
-
-  // Step 3: sort within each ruta by nearest-neighbor
-  const byRuta = {};
-  geocoded.forEach(g => {
-    const rid = rutaFija || rutaAsignada[g.dir+g.nombre] || rutas[0]?.id;
-    if (!byRuta[rid]) byRuta[rid]=[];
-    byRuta[rid].push(g);
+  // Nearest-neighbor sort per route
+  Object.keys(byRuta).forEach(rid=>{
+    const wC2=byRuta[rid].filter(g=>g.lat);
+    byRuta[rid]=[...nnSort(wC2),...byRuta[rid].filter(g=>!g.lat)];
   });
-  Object.keys(byRuta).forEach(rid => {
-    const withC = byRuta[rid].filter(g=>g.lat);
-    const sorted = nearestNeighborSort(withC);
-    const noCoord = byRuta[rid].filter(g=>!g.lat);
-    byRuta[rid] = [...sorted, ...noCoord];
-  });
-
-  // Step 4: write to Firestore
-  const batch = db.batch();
-  let ok=0, skip=0, alerts=[];
-  Object.entries(byRuta).forEach(([rid,list]) => {
-    const baseOrden = direcciones.filter(d=>d.rutaId===rid).length;
-    const ruta = rutas.find(r=>r.id===rid);
-    const cap = ruta?.vehiculo==='Prensa'?CAP_PRENSA:CAP_FURGO;
-    let m3acc = direcciones.filter(d=>d.rutaId===rid).reduce((s,d)=>s+(parseFloat(d.m3)||0),0);
-    list.forEach((g,i) => {
-      const m3v = parseFloat(g.m3)||0;
-      m3acc+=m3v;
-      if (m3acc>cap) alerts.push(`⚠ "${g.nombre}": supera capacidad de ${ruta?.nombre} (${m3acc.toFixed(1)}/${cap}m³)`);
-      const id = `d_${Date.now()}_${Math.random().toString(36).slice(2,6)}`;
-      batch.set(db.collection('direcciones').doc(id), {
-        rutaId:rid, cliente:g.nombre, direccion:g.dir,
-        vehiculo: g.vehiculoPref && g.vehiculoPref !== 'Auto-asignar' ? g.vehiculoPref : (ruta?.vehiculo||'Furgón'),
-        matricula: g.matricula||'', chofer: g.chofer||'', cargador: g.cargador||'',
-        turno: g.turno||'Mañana',
-        residuo: capitalize(g.residuo||'Comercial'),
-        frecuencia: g.frecuencia||'',
-        parada: parseInt(g.parada_max_min||g.parada||5)||5,
-        m3: parseFloat(g.m3)||0,
-        orden: baseOrden+i+1,
-        lat:g.lat||null, lng:g.lng||null, createdAt:Date.now()
+  // Batch write
+  const batch=db.batch();
+  let ok=0,alerts=[];
+  Object.entries(byRuta).forEach(([rid,list])=>{
+    const base=dirs.filter(d=>d.rutaId===rid).length;
+    const r=rutas.find(x=>x.id===rid);
+    const cap=r?.vehiculo==='Prensa'?CAP_PRENSA:CAP_FURGO;
+    let m3acc=dirs.filter(d=>d.rutaId===rid).reduce((s,d)=>s+(parseFloat(d.m3)||0),0);
+    list.forEach((g,i)=>{
+      m3acc+=g.m3;
+      if(m3acc>cap) alerts.push(`⚠ "${g.nombre}": supera capacidad de ${r?.nombre}`);
+      const id=`d_${Date.now()}_${Math.random().toString(36).slice(2,5)}`;
+      batch.set(db.collection('direcciones').doc(id),{
+        rutaId:rid,cliente:g.nombre,direccion:g.dir,codigo:genCod(),
+        vehiculo:r?.vehiculo||'Furgón',turno:g.turno,residuo:g.residuo,
+        frecuencia:g.frecuencia,parada:g.parada,m3:g.m3,
+        orden:base+i+1,lat:g.lat||null,lng:g.lng||null,createdAt:Date.now()
       });
       ok++;
     });
   });
   await batch.commit();
-
   btn.disabled=false;
   importRows=[];
-  document.getElementById('import-file').value='';
-  document.getElementById('import-preview').style.display='none';
-  document.getElementById('import-filename').textContent='Ningún archivo seleccionado';
-
-  let html=`<div style="background:var(--green-100);color:var(--green-800);border-radius:8px;padding:12px;font-size:13px;font-weight:600">
-    ✅ ${ok} clientes importados con K-Means${rutaFija?' (ruta fija)':''} y ordenados por proximidad.
-    ${skip?`${skip} omitidos por datos incompletos.`:''}
-  </div>`;
-  if (alerts.length) html+=`<div style="margin-top:10px">${alerts.map(a=>`<div class="alert-chip" style="margin-bottom:4px;display:block">${a}</div>`).join('')}</div>`;
-  resultEl.innerHTML=html;
+  document.getElementById('imp-file').value='';
+  document.getElementById('imp-preview').style.display='none';
+  document.getElementById('imp-filename').textContent='Ningún archivo seleccionado';
+  document.getElementById('imp-result').innerHTML=`
+    <div style="background:var(--g1);color:var(--g8);border-radius:8px;padding:12px;font-size:13px;font-weight:600">
+      ✅ ${ok} clientes importados con K-Means + orden optimizado desde la planta.
+    </div>
+    ${alerts.map(a=>`<div class="chip chip-red" style="margin-top:4px;display:block">${a}</div>`).join('')}`;
 };
 
 // ═══════════════════════════════════════════════
 //  EXPORTAR
 // ═══════════════════════════════════════════════
-function renderExportar() {
-  const sel = document.getElementById('export-ruta-sel');
-  if (!sel) return;
-  sel.innerHTML='<option value="">— Todas las rutas —</option>'+
-    rutas.map(r=>`<option value="${r.id}">${r.nombre}</option>`).join('');
-  const alerts=[];
+function renderExportar(){
+  const sel=document.getElementById('exp-ruta');
+  if(!sel) return;
+  sel.innerHTML='<option value="">— Todas —</option>'+rutas.map(r=>`<option value="${r.id}">${r.nombre}</option>`).join('');
+  const al=[];
   rutas.forEach(r=>{
-    const count=direcciones.filter(d=>d.rutaId===r.id).length;
     const cap=r.vehiculo==='Prensa'?CAP_PRENSA:CAP_FURGO;
-    const m3=direcciones.filter(d=>d.rutaId===r.id).reduce((s,d)=>s+(parseFloat(d.m3)||0),0);
-    const hrs=estimateHours(r.id);
-    if(count>MAX_DIRS) alerts.push(`⚠ ${r.nombre}: ${count} paradas`);
-    if(m3>cap)         alerts.push(`⚠ ${r.nombre}: ${m3.toFixed(1)}/${cap}m³`);
-    if(hrs>MAX_HRS)    alerts.push(`⚠ ${r.nombre}: ${hrs.toFixed(1)}h`);
+    const m3=dirs.filter(d=>d.rutaId===r.id).reduce((s,d)=>s+(parseFloat(d.m3)||0),0);
+    const c=dirs.filter(d=>d.rutaId===r.id).length;
+    if(c>MAX_DIRS) al.push(`⚠ ${r.nombre}: ${c} paradas`);
+    if(m3>cap) al.push(`⚠ ${r.nombre}: ${m3.toFixed(1)}/${cap}m³`);
   });
-  document.getElementById('export-alerts').innerHTML=alerts.map(a=>`<div class="alert-chip" style="margin-bottom:4px">${a}</div>`).join('')||'<p class="text-muted text-sm">Sin alertas ✅</p>';
+  document.getElementById('exp-alerts').innerHTML=al.map(a=>`<div class="chip chip-red" style="margin-bottom:3px">${a}</div>`).join('')||'<p class="muted text-sm">Sin alertas ✅</p>';
 }
 
-function getExportData() {
-  const rid=document.getElementById('export-ruta-sel')?.value;
-  return (rid?direcciones.filter(d=>d.rutaId===rid):[...direcciones])
-    .sort((a,b)=>{
-      const ra=rutas.find(r=>r.id===a.rutaId)?.nombre||'';
-      const rb=rutas.find(r=>r.id===b.rutaId)?.nombre||'';
-      return ra!==rb?ra.localeCompare(rb):(a.orden||999)-(b.orden||999);
-    });
+function getExpData(){
+  const rid=document.getElementById('exp-ruta')?.value||'';
+  return (rid?dirs.filter(d=>d.rutaId===rid):[...dirs]).sort((a,b)=>{
+    const ra=rutas.find(r=>r.id===a.rutaId)?.nombre||'';
+    const rb=rutas.find(r=>r.id===b.rutaId)?.nombre||'';
+    return ra!==rb?ra.localeCompare(rb):(a.orden||999)-(b.orden||999);
+  });
 }
 
-window.exportarCSV = () => {
-  const data = getExportData();
-  const headers = ['Ruta','Orden','Cliente','Dirección','Frecuencia','Vehículo','Matrícula','Chofer','Cargador','Turno','Tipo Residuo','m³/visita','Máx.Parada(min)'];
-  const rows = data.map(d => {
-    const r = rutas.find(x=>x.id===d.rutaId);
-    return [r?.nombre||'—', d.orden||'—', d.cliente, d.direccion, d.frecuencia||'—',
-            d.vehiculo||'—', d.matricula||'—', d.chofer||'—', d.cargador||'—',
-            d.turno||'—', d.residuo||'—', d.m3||0, d.parada||5]
-      .map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',');
+window.exportExcel=()=>{
+  const data=getExpData();
+  if(!data.length){alert('No hay datos.');return;}
+  const rows=[['Cód.','Ruta','Orden','Cliente','Dirección','Frecuencia','Turno','Vehículo','Matrícula','Chofer','Cargador','Residuo','m³/visita','Parada(min)']];
+  data.forEach(d=>{
+    const r=rutas.find(x=>x.id===d.rutaId);
+    rows.push([d.codigo||'—',r?.nombre||'—',d.orden||'—',d.cliente,d.direccion,d.frecuencia||'—',d.turno||'—',d.vehiculo||'—',r?.matricula||'—',r?.chofer||'—',r?.cargador||'—',d.residuo||'—',d.m3||0,d.parada||5]);
   });
-  const csv = [headers.join(','), ...rows].join('\n');
-  const blob = new Blob(['\ufeff'+csv], {type:'text/csv;charset=utf-8'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a'); a.href=url; a.download='rutas_aborgama.csv'; a.click();
-  URL.revokeObjectURL(url);
+  const wb=XLSX.utils.book_new();
+  const ws=XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols']=[{wch:10},{wch:14},{wch:7},{wch:28},{wch:38},{wch:24},{wch:10},{wch:10},{wch:12},{wch:18},{wch:18},{wch:12},{wch:10},{wch:12}];
+  XLSX.utils.book_append_sheet(wb,ws,'Rutas');
+  // Summary
+  const sum=[['Ruta','Vehículo','Tipo','Matrícula','Chofer','Paradas','m³ Total','Tiempo Est.']];
+  rutas.forEach(r=>{
+    const rd=dirs.filter(d=>d.rutaId===r.id);
+    sum.push([r.nombre,r.vehiculo,r.residuo||'Mixto',r.matricula||'—',r.chofer||'—',rd.length,rd.reduce((s,d)=>s+(parseFloat(d.m3)||0),0).toFixed(1),estHrs(r.id).toFixed(1)+'h']);
+  });
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(sum),'Resumen');
+  XLSX.writeFile(wb,'Rutas_Aborgama.xlsx');
 };
 
-window.exportarExcel = () => {
-  const data = getExportData();
-  if (!data.length) { alert('No hay datos para exportar.'); return; }
-
-  // Build worksheet data
-  const wsData = [
-    // Title row
-    ['ABORGAMA — Rutas de Recolección', '', '', '', '', '', '', '', '', '', '', '', ''],
-    [`Generado: ${new Date().toLocaleString('es-UY')}`, '', '', '', '', '', '', '', '', '', '', '', ''],
-    [],
-    // Headers
-    ['Ruta','Orden','Cliente','Dirección','Frecuencia','Vehículo','Matrícula','Chofer','Cargador','Turno','Tipo Residuo','m³/visita','Máx.Parada(min)'],
-  ];
-
-  // Group by ruta with subtotals
-  let currentRuta = null;
-  data.forEach(d => {
-    const r = rutas.find(x=>x.id===d.rutaId);
-    const rutaNombre = r?.nombre || '—';
-    if (rutaNombre !== currentRuta) {
-      if (currentRuta !== null) wsData.push([]); // blank separator
-      currentRuta = rutaNombre;
-    }
-    wsData.push([
-      rutaNombre, d.orden||'', d.cliente, d.direccion, d.frecuencia||'—',
-      d.vehiculo||'—', d.matricula||'—', d.chofer||'—', d.cargador||'—',
-      d.turno||'—', d.residuo||'—', d.m3||0, d.parada||5
-    ]);
-  });
-
-  const wb_xl = XLSX.utils.book_new();
-  const ws_xl = XLSX.utils.aoa_to_sheet(wsData);
-
-  // Column widths
-  ws_xl['!cols'] = [
-    {wch:16},{wch:8},{wch:32},{wch:40},{wch:24},{wch:12},
-    {wch:12},{wch:20},{wch:20},{wch:10},{wch:14},{wch:12},{wch:14}
-  ];
-
-  // Merge title cells
-  ws_xl['!merges'] = [
-    {s:{r:0,c:0}, e:{r:0,c:12}},
-    {s:{r:1,c:0}, e:{r:1,c:12}},
-  ];
-
-  XLSX.utils.book_append_sheet(wb_xl, ws_xl, 'Rutas');
-
-  // Also add a summary sheet per ruta
-  const summaryData = [['Ruta','Vehículo','Tipo','Paradas','m³ Total','Tiempo Est. (h)','% Capacidad']];
-  rutas.forEach(r => {
-    const dirs = direcciones.filter(d=>d.rutaId===r.id);
-    const count = dirs.length;
-    const m3total = dirs.reduce((s,d)=>s+(parseFloat(d.m3)||0),0);
-    const cap = r.vehiculo==='Prensa' ? CAP_PRENSA : CAP_FURGO;
-    const hrs = estimateHours(r.id);
-    summaryData.push([
-      r.nombre, r.vehiculo, r.tipo, count,
-      Math.round(m3total*10)/10, Math.round(hrs*10)/10,
-      Math.round(m3total/cap*100)+'%'
-    ]);
-  });
-  const ws_sum = XLSX.utils.aoa_to_sheet(summaryData);
-  ws_sum['!cols'] = [{wch:16},{wch:12},{wch:14},{wch:10},{wch:12},{wch:16},{wch:14}];
-  XLSX.utils.book_append_sheet(wb_xl, ws_sum, 'Resumen por Ruta');
-
-  XLSX.writeFile(wb_xl, 'rutas_aborgama.xlsx');
+window.exportCSV=()=>{
+  const data=getExpData();
+  const h=['Cod','Ruta','Orden','Cliente','Dirección','Frecuencia','Turno','Vehículo','Residuo','m³','Parada(min)'];
+  const rows=data.map(d=>{const r=rutas.find(x=>x.id===d.rutaId);return[d.codigo||'—',r?.nombre||'—',d.orden||'—',d.cliente,d.direccion,d.frecuencia||'—',d.turno||'—',d.vehiculo||'—',d.residuo||'—',d.m3||0,d.parada||5].map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',');});
+  const blob=new Blob(['\ufeff'+[h.join(','),...rows].join('\n')],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='Rutas_Aborgama.csv';a.click();
 };
 
-window.exportarHTML = () => {
-  const data = getExportData();
-  const rows = data.map(d => {
-    const r = rutas.find(x=>x.id===d.rutaId);
-    return `<tr>
-      <td>${r?.nombre||'—'}</td><td>${d.orden||'—'}</td><td><b>${d.cliente}</b></td>
-      <td>${d.direccion}</td><td>${d.frecuencia||'—'}</td><td>${d.vehiculo||'—'}</td>
-      <td>${d.matricula||'—'}</td><td>${d.chofer||'—'}</td><td>${d.cargador||'—'}</td>
-      <td>${d.turno||'—'}</td><td>${d.residuo||'—'}</td><td>${d.m3||0}m³</td><td>${d.parada||5}min</td>
-    </tr>`;
-  }).join('');
-  const w = window.open('','_blank');
-  w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Rutas Aborgama</title>
-  <style>body{font-family:Arial,sans-serif;padding:20px}h1{color:#1e4620}
-  table{width:100%;border-collapse:collapse;font-size:11px}
-  th{background:#1e4620;color:#fff;padding:7px;text-align:left}
-  td{padding:6px 7px;border-bottom:1px solid #e5e7eb}
-  tr:nth-child(even) td{background:#f1f8f1}
-  @media print{button{display:none}}</style></head>
-  <body><h1>🌿 Aborgama — Rutas de Recolección</h1>
-  <p style="color:#64748b;font-size:13px">Generado: ${new Date().toLocaleString('es-UY')}</p>
-  <table><thead><tr><th>Ruta</th><th>Orden</th><th>Cliente</th><th>Dirección</th>
-  <th>Frecuencia</th><th>Vehículo</th><th>Matrícula</th><th>Chofer</th><th>Cargador</th>
-  <th>Turno</th><th>Residuo</th><th>m³</th><th>Máx.Parada</th></tr></thead>
-  <tbody>${rows}</tbody></table>
-  <button onclick="window.print()" style="margin-top:16px;padding:8px 20px;background:#1e4620;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:14px">🖨 Imprimir</button>
-  </body></html>`);
+window.exportPrint=()=>{
+  const data=getExpData();
+  const rows=data.map(d=>{const r=rutas.find(x=>x.id===d.rutaId);return`<tr><td>${d.codigo||'—'}</td><td>${r?.nombre||'—'}</td><td>${d.orden||'—'}</td><td><b>${d.cliente}</b></td><td>${d.direccion}</td><td>${d.frecuencia||'—'}</td><td>${d.turno||'—'}</td><td>${d.residuo||'—'}</td><td>${d.m3||0}m³</td></tr>`;}).join('');
+  const w=window.open('','_blank');
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Rutas Aborgama</title><style>body{font-family:Arial,sans-serif;padding:20px}h1{color:#1e4620}table{width:100%;border-collapse:collapse;font-size:11px}th{background:#1e4620;color:#fff;padding:7px}td{padding:6px 7px;border-bottom:1px solid #e5e7eb}tr:nth-child(even) td{background:#f1f8f1}@media print{button{display:none}}</style></head><body><h1>🌿 Aborgama — Rutas</h1><p style="color:#64748b;font-size:12px">${new Date().toLocaleString('es-UY')}</p><table><thead><tr><th>Cód.</th><th>Ruta</th><th>Orden</th><th>Cliente</th><th>Dirección</th><th>Frecuencia</th><th>Turno</th><th>Residuo</th><th>m³</th></tr></thead><tbody>${rows}</tbody></table><button onclick="window.print()" style="margin-top:16px;padding:8px 20px;background:#1e4620;color:#fff;border:none;border-radius:6px;cursor:pointer">🖨 Imprimir</button></body></html>`);
   w.document.close();
 };
 
 // ═══════════════════════════════════════════════
 //  USUARIOS
 // ═══════════════════════════════════════════════
-async function renderUsuarios() {
-  const snap = await db.collection('usuarios').get();
-  const usersData = snap.docs.map(d=>({id:d.id,...d.data()}));
-  const tbody=document.getElementById('tbody-usuarios');
-  if(!tbody) return;
-  tbody.innerHTML=usersData.map(u=>{
-    const isSelf=u.id===currentUser.uid;
-    return `<tr>
-      <td><b>${u.email||u.id}</b>${isSelf?' <span style="font-size:11px;color:var(--green-600)">(vos)</span>':''}</td>
-      <td><span style="background:${u.rol==='master'?'var(--green-100)':'var(--slate-100)'};color:${u.rol==='master'?'var(--green-700)':'var(--slate-700)'};padding:2px 8px;border-radius:20px;font-size:12px;font-weight:600">${u.rol==='master'?'Master':'Operador'}</span></td>
-      <td><div class="flex-gap">
-        <button class="btn btn-sm btn-secondary" onclick="openCambiarClaveUsuario('${u.id}')">🔑 Cambiar clave</button>
-        ${!isSelf?`<button class="btn btn-sm btn-danger" onclick="deleteUsuario('${u.id}')">🗑</button>`:''}
-      </div></td>
-    </tr>`;
+async function renderUsuarios(){
+  const snap=await db.collection('usuarios').get();
+  const usrs=snap.docs.map(d=>({id:d.id,...d.data()}));
+  document.getElementById('usr-tbody').innerHTML=usrs.map(u=>{
+    const isSelf=u.id===me?.uid;
+    return`<tr><td><b>${u.email||u.id}</b>${isSelf?' <span class="chip chip-green" style="font-size:9px">vos</span>':''}</td>
+    <td><span class="chip ${u.rol==='master'?'chip-green':'chip-blue'}">${u.rol==='master'?'Master':'Operador'}</span></td>
+    <td>${u.modulos||'rutas'}</td>
+    <td><div class="flex-gap">
+      <button class="btn btn-sm btn-secondary" onclick="openCambiarClave()">🔑</button>
+      ${!isSelf?`<button class="btn btn-sm btn-danger" onclick="delUsr('${u.id}')">🗑</button>`:''}
+    </div></td></tr>`;
   }).join('');
 }
 
-window.saveUsuario = async () => {
-  const email=gV('usr-email').trim();
-  const pass=gV('usr-pass');
-  const rol=gV('usr-rol');
-  if(!email||!pass){alert('Email y contraseña son obligatorios.');return;}
-  try {
-    const cred=await auth.createUserWithEmailAndPassword(email,pass);
-    await db.collection('usuarios').doc(cred.user.uid).set({email,rol,createdAt:Date.now()});
-    closeModal('modal-usuario');
-    renderUsuarios();
-  } catch(e){alert('Error: '+e.message);}
+window.openUsrModal=()=>{['usr-email','usr-pass'].forEach(x=>sv(x,''));sv('usr-rol','operador');sv('usr-modulos','rutas');openModal('modal-usr');};
+window.saveUsr=async()=>{
+  const email=gv('usr-email').trim(),pass=gv('usr-pass'),rol=gv('usr-rol'),modulos=gv('usr-modulos');
+  if(!email||!pass){alert('Email y contraseña requeridos.');return;}
+  try{const c=await auth.createUserWithEmailAndPassword(email,pass);await db.collection('usuarios').doc(c.user.uid).set({email,rol,modulos,createdAt:Date.now()});closeModal('modal-usr');renderUsuarios();}
+  catch(e){alert('Error: '+e.message);}
 };
+window.delUsr=async id=>{if(!confirm('¿Eliminar?'))return;await db.collection('usuarios').doc(id).delete();renderUsuarios();};
 
-window.deleteUsuario = async id => {
-  if(!confirm('¿Eliminar este usuario?'))return;
-  await db.collection('usuarios').doc(id).delete();
-  renderUsuarios();
-};
-
-// ─── Cambiar clave ───
-window.openCambiarClave = () => {
-  setV('clave-target-id',currentUser.uid);
-  document.getElementById('clave-modal-title').textContent='Cambiar mi contraseña';
-  document.getElementById('clave-actual-group').style.display='';
-  ['clave-actual','clave-nueva','clave-confirmar'].forEach(x=>setV(x,''));
-  document.getElementById('clave-error').textContent='';
-  openModal('modal-clave');
-};
-
-window.openCambiarClaveUsuario = async id => {
-  setV('clave-target-id',id);
-  const isSelf=id===currentUser.uid;
-  const snap=await db.collection('usuarios').doc(id).get();
-  const email=snap.exists?snap.data().email:id;
-  document.getElementById('clave-modal-title').textContent=isSelf?'Cambiar mi contraseña':`Cambiar clave de ${email}`;
-  document.getElementById('clave-actual-group').style.display=isSelf?'':'none';
-  ['clave-actual','clave-nueva','clave-confirmar'].forEach(x=>setV(x,''));
-  document.getElementById('clave-error').textContent='';
-  openModal('modal-clave');
-};
-
-window.saveClave = async () => {
-  const nueva=gV('clave-nueva');
-  const conf=gV('clave-confirmar');
-  const errEl=document.getElementById('clave-error');
-  if(!nueva||nueva.length<6){errEl.textContent='Mínimo 6 caracteres.';return;}
-  if(nueva!==conf){errEl.textContent='Las contraseñas no coinciden.';return;}
-  try {
-    await auth.currentUser.updatePassword(nueva);
-    closeModal('modal-clave');
-    alert('✅ Contraseña actualizada.');
-  } catch(e){errEl.textContent='Error: '+e.message;}
+window.openCambiarClave=()=>{sv('clave-nueva','');sv('clave-conf','');document.getElementById('clave-err').textContent='';openModal('modal-clave');};
+window.saveClave=async()=>{
+  const n=gv('clave-nueva'),c=gv('clave-conf'),err=document.getElementById('clave-err');
+  if(!n||n.length<6){err.textContent='Mínimo 6 caracteres.';return;}
+  if(n!==c){err.textContent='No coinciden.';return;}
+  try{await auth.currentUser.updatePassword(n);closeModal('modal-clave');alert('✅ Contraseña actualizada.');}
+  catch(e){err.textContent='Error: '+e.message;}
 };
 
 // ═══════════════════════════════════════════════
 //  UTILS
 // ═══════════════════════════════════════════════
-async function geocode(address) {
-  try {
-    const q=encodeURIComponent(address+', Uruguay');
-    const res=await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${q}&limit=1`);
-    const data=await res.json();
-    if(data.length) return {lat:parseFloat(data[0].lat),lng:parseFloat(data[0].lon)};
-  } catch{}
-  return null;
-}
-
-function parseCSV(text) {
-  const lines=text.trim().split(/\r?\n/);
-  if(lines.length<2) return [];
-  const headers=lines[0].split(',').map(h=>h.trim().toLowerCase().replace(/['"]/g,''));
+function parseCSV(text){
+  const lines=text.trim().split(/\r?\n/);if(lines.length<2)return[];
+  const hdrs=lines[0].split(',').map(h=>h.trim().toLowerCase().replace(/['"*]/g,''));
   return lines.slice(1).map(line=>{
-    const vals=[]; let cur='',inQ=false;
-    for(const ch of line+','){
-      if(ch==='"'){inQ=!inQ;}
-      else if(ch===','&&!inQ){vals.push(cur.trim());cur='';}
-      else cur+=ch;
-    }
-    const obj={};
-    headers.forEach((h,i)=>{obj[h]=(vals[i]||'').replace(/^"|"$/g,'').trim();});
-    return obj;
-  }).filter(r=>r.nombre||r.cliente||r.direccion);
+    const vals=[];let cur='',inQ=false;
+    for(const ch of line+','){if(ch==='"'){inQ=!inQ;}else if(ch===','&&!inQ){vals.push(cur.trim());cur='';}else cur+=ch;}
+    const o={};hdrs.forEach((h,i)=>{o[h]=(vals[i]||'').replace(/^"|"$/g,'').trim();});return o;
+  }).filter(r=>r.nombre||r.cliente);
 }
 
-function capitalize(s){return s?s.charAt(0).toUpperCase()+s.slice(1).toLowerCase():s;}
-function gV(id){return document.getElementById(id)?.value||'';}
-function setV(id,val){const el=document.getElementById(id);if(el)el.value=val;}
-function openModal(id){document.getElementById(id).classList.add('open');}
-function closeModal(id){document.getElementById(id).classList.remove('open');}
+function cap1(s){return s?s.charAt(0).toUpperCase()+s.slice(1).toLowerCase():s;}
+function gv(id){return document.getElementById(id)?.value||'';}
+function sv(id,val){const el=document.getElementById(id);if(el)el.value=val;}
+function show(id){const el=document.getElementById(id);if(el){el.style.display='flex';}}
+function hide(id){const el=document.getElementById(id);if(el)el.style.display='none';}
+function openModal(id){document.getElementById(id)?.classList.add('open');}
+function closeModal(id){document.getElementById(id)?.classList.remove('open');}
 window.closeModal=closeModal;
-
-// Init after DOM is ready
-window.addEventListener('DOMContentLoaded', () => {
-  document.querySelectorAll('.modal-overlay').forEach(o=>{
-    o.addEventListener('click',e=>{if(e.target===o)o.classList.remove('open');});
-  });
-  document.getElementById('login-pass')?.addEventListener('keydown', e=>{ if(e.key==='Enter') window.doLogin(); });
-  document.getElementById('login-user')?.addEventListener('keydown', e=>{ if(e.key==='Enter') window.doLogin(); });
-});
 </script>
-
-<style>
-:root{
-  --green-900:#1a3a1a;--green-800:#1e4620;--green-700:#2d6a2d;
-  --green-600:#3a8c3a;--green-500:#4caf50;--green-400:#6fcf70;
-  --green-100:#e8f5e9;--green-50:#f1f8f1;
-  --red:#dc2626;--red-light:#fef2f2;
-  --slate-900:#0f172a;--slate-700:#334155;--slate-500:#64748b;
-  --slate-300:#cbd5e1;--slate-100:#f1f5f9;--white:#ffffff;
-  --shadow-sm:0 1px 3px rgba(0,0,0,.08);--shadow-md:0 4px 16px rgba(0,0,0,.12);
-  --shadow-lg:0 8px 32px rgba(0,0,0,.16);--radius:10px;--radius-lg:16px;
-}
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-body{font-family:'DM Sans',sans-serif;background:var(--slate-100);color:var(--slate-900);height:100vh;display:flex;flex-direction:column;overflow:hidden;}
-/* TOPBAR */
-.topbar{background:var(--green-800);color:#fff;display:flex;align-items:center;gap:16px;padding:0 24px;height:56px;flex-shrink:0;box-shadow:var(--shadow-md);z-index:100;}
-.topbar-logo{display:flex;align-items:center;gap:10px;font-weight:700;font-size:17px;letter-spacing:-.3px;}
-.topbar-logo img{height:30px;filter:brightness(10);}
-.topbar-divider{width:1px;height:28px;background:rgba(255,255,255,.2);margin:0 4px;}
-.topbar-subtitle{font-size:13px;color:rgba(255,255,255,.7);font-weight:400;}
-.topbar-spacer{flex:1;}
-.topbar-user{display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;padding:6px 12px;border-radius:8px;transition:background .2s;}
-.topbar-user:hover{background:rgba(255,255,255,.1);}
-.topbar-avatar{width:30px;height:30px;border-radius:50%;background:var(--green-500);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;}
-/* NAV */
-.nav-tabs{background:var(--green-900);display:flex;gap:2px;padding:0 24px;flex-shrink:0;overflow-x:auto;}
-.nav-tab{padding:10px 16px;font-size:13px;font-weight:500;color:rgba(255,255,255,.6);cursor:pointer;border-bottom:3px solid transparent;transition:all .2s;white-space:nowrap;}
-.nav-tab:hover{color:rgba(255,255,255,.9);}
-.nav-tab.active{color:var(--green-400);border-bottom-color:var(--green-400);}
-/* LAYOUT */
-.main{display:flex;flex:1;overflow:hidden;}
-/* SIDEBAR */
-.sidebar{width:340px;flex-shrink:0;background:var(--white);border-right:1px solid var(--slate-300);display:flex;flex-direction:column;overflow:hidden;}
-.sidebar-header{padding:12px 16px;border-bottom:1px solid var(--slate-100);display:flex;align-items:center;justify-content:space-between;gap:8px;}
-.sidebar-title{font-size:14px;font-weight:600;}
-.sidebar-count{font-size:12px;background:var(--green-100);color:var(--green-700);padding:2px 8px;border-radius:20px;font-weight:600;}
-.sidebar-ctrl{display:flex;gap:6px;padding:8px 12px;border-bottom:1px solid var(--slate-100);}
-.sidebar-list{flex:1;overflow-y:auto;padding:4px 0;}
-.sidebar-item{padding:9px 12px;display:flex;align-items:center;gap:8px;cursor:pointer;transition:background .15s;border-left:3px solid transparent;}
-.sidebar-item:hover{background:var(--slate-100);}
-.sidebar-item.active{background:var(--green-50);border-left-color:var(--green-500);}
-.sidebar-item-name{font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.sidebar-item-sub{font-size:11px;color:var(--slate-500);margin-top:1px;}
-.sidebar-item-badge{font-size:11px;padding:2px 7px;border-radius:20px;font-weight:600;flex-shrink:0;}
-.badge-ok{background:var(--green-100);color:var(--green-700);}
-.badge-warn{background:#fef3c7;color:#92400e;}
-.badge-alert{background:var(--red-light);color:var(--red);}
-/* CONTENT */
-.content{flex:1;overflow:hidden;display:flex;flex-direction:column;}
-#map{flex:1;min-height:0;}
-.panel{flex:1;overflow-y:auto;padding:24px;display:none;}
-.panel.active{display:block;}
-.map-wrap{flex:1;position:relative;display:none;}
-.map-wrap.active{display:flex;flex-direction:column;}
-.panel-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:8px;}
-.panel-title{font-size:20px;font-weight:700;}
-/* BUTTONS */
-.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;border:none;transition:all .2s;white-space:nowrap;}
-.btn-primary{background:var(--green-600);color:#fff;}
-.btn-primary:hover{background:var(--green-700);}
-.btn-secondary{background:var(--slate-100);color:var(--slate-700);}
-.btn-secondary:hover{background:var(--slate-300);}
-.btn-danger{background:var(--red-light);color:var(--red);}
-.btn-danger:hover{background:#fecaca;}
-.btn-sm{padding:5px 10px;font-size:12px;}
-/* FORM */
-.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
-.form-full{grid-column:1/-1;}
-.form-group{display:flex;flex-direction:column;gap:5px;}
-.form-label{font-size:11px;font-weight:700;color:var(--slate-700);text-transform:uppercase;letter-spacing:.4px;}
-.form-input,.form-select{padding:9px 12px;border:1.5px solid var(--slate-300);border-radius:8px;font-size:13px;font-family:inherit;outline:none;transition:border .2s;background:var(--white);}
-.form-input:focus,.form-select:focus{border-color:var(--green-500);}
-.form-hint{font-size:11px;color:var(--slate-500);}
-/* CARDS */
-.card{background:var(--white);border-radius:var(--radius-lg);padding:20px;box-shadow:var(--shadow-sm);border:1px solid var(--slate-300);}
-.card+.card{margin-top:14px;}
-.card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;gap:8px;flex-wrap:wrap;}
-.card-title{font-size:14px;font-weight:600;}
-/* TABLE */
-.table-wrap{overflow-x:auto;border-radius:var(--radius);border:1px solid var(--slate-300);}
-table{width:100%;border-collapse:collapse;font-size:13px;}
-th{background:var(--slate-100);padding:9px 12px;text-align:left;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--slate-700);border-bottom:1px solid var(--slate-300);white-space:nowrap;}
-td{padding:9px 12px;border-bottom:1px solid var(--slate-100);vertical-align:middle;}
-tr:last-child td{border-bottom:none;}
-tr:hover td{background:var(--slate-100);}
-/* MODAL */
-.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:1000;padding:20px;}
-.modal-overlay.open{display:flex;}
-.modal{background:var(--white);border-radius:var(--radius-lg);padding:28px;width:100%;max-width:640px;max-height:90vh;overflow-y:auto;box-shadow:var(--shadow-lg);animation:slideUp .2s ease;}
-@keyframes slideUp{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
-.modal-title{font-size:17px;font-weight:700;margin-bottom:20px;display:flex;align-items:center;gap:8px;}
-.modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:20px;}
-/* LOGIN */
-#login-screen{position:fixed;inset:0;background:linear-gradient(135deg,var(--green-900) 0%,var(--green-700) 100%);display:flex;align-items:center;justify-content:center;z-index:9999;}
-.login-box{background:var(--white);border-radius:20px;padding:40px;width:360px;box-shadow:var(--shadow-lg);text-align:center;}
-.login-logo{margin-bottom:20px;}
-.login-logo img{height:48px;}
-.login-title{font-size:22px;font-weight:700;color:var(--green-800);margin-bottom:4px;}
-.login-sub{font-size:13px;color:var(--slate-500);margin-bottom:24px;}
-.login-group{margin-bottom:14px;text-align:left;}
-.login-label{font-size:12px;font-weight:700;color:var(--slate-700);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:5px;}
-.login-input{width:100%;padding:11px 14px;border:1.5px solid var(--slate-300);border-radius:9px;font-size:14px;font-family:inherit;outline:none;transition:border .2s;}
-.login-input:focus{border-color:var(--green-500);}
-.login-btn{width:100%;padding:12px;background:var(--green-600);color:#fff;border:none;border-radius:9px;font-size:15px;font-weight:700;font-family:inherit;cursor:pointer;margin-top:6px;transition:background .2s;}
-.login-btn:hover{background:var(--green-700);}
-.login-error{font-size:13px;color:var(--red);margin-top:10px;min-height:18px;}
-/* STATS */
-.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px;}
-.stat-card{background:var(--white);border-radius:var(--radius);padding:14px 16px;border:1px solid var(--slate-300);}
-.stat-value{font-size:26px;font-weight:700;color:var(--green-700);}
-.stat-label{font-size:11px;color:var(--slate-500);text-transform:uppercase;letter-spacing:.4px;margin-top:2px;}
-/* ALERT */
-.alert-chip{display:inline-flex;align-items:center;gap:4px;background:var(--red-light);color:var(--red);padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;}
-/* MAP TOOLS */
-.map-toolbar{position:absolute;top:10px;right:10px;z-index:500;display:flex;flex-direction:column;gap:8px;}
-.map-btn{background:var(--white);border:1px solid var(--slate-300);border-radius:8px;padding:7px 13px;font-size:12px;font-weight:600;font-family:inherit;cursor:pointer;box-shadow:var(--shadow-sm);transition:all .2s;}
-.map-btn:hover{background:var(--green-50);border-color:var(--green-400);}
-.map-legend{position:absolute;bottom:30px;left:10px;z-index:500;background:var(--white);border-radius:10px;padding:12px 14px;box-shadow:var(--shadow-md);border:1px solid var(--slate-300);max-height:220px;overflow-y:auto;font-size:12px;min-width:160px;}
-.legend-title{font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--slate-500);margin-bottom:8px;}
-.legend-item{display:flex;align-items:center;gap:7px;margin-bottom:5px;}
-.legend-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
-#overlap-warnings{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:500;max-width:500px;display:none;}
-/* MISC */
-.mono{font-family:'DM Mono',monospace;}
-.text-muted{color:var(--slate-500);}
-.text-sm{font-size:12px;}
-.flex-gap{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
-.mt-2{margin-top:8px;}
-
-/* DIA FILTER BUTTONS */
-.dia-btn{padding:4px 8px;border:1.5px solid var(--slate-300);border-radius:6px;font-size:11px;font-weight:600;font-family:inherit;cursor:pointer;background:var(--white);color:var(--slate-700);transition:all .15s;}
-.dia-btn:hover{border-color:var(--green-500);color:var(--green-700);}
-.dia-btn.active{background:var(--green-600);color:#fff;border-color:var(--green-600);}
-
-/* ── MOBILE RESPONSIVE ── */
-@media (max-width: 768px) {
-  /* Topbar */
-  .topbar{padding:0 12px;height:50px;}
-  .topbar-subtitle,.topbar-divider{display:none;}
-  .topbar-logo{font-size:14px;}
-  .topbar-user span:not(.topbar-avatar){display:none;}
-
-  /* Nav tabs — scrollable, smaller */
-  .nav-tabs{padding:0 8px;}
-  .nav-tab{padding:8px 10px;font-size:11px;}
-
-  /* Main layout — stack vertically */
-  .main{flex-direction:column;}
-
-  /* Sidebar becomes top bar in mapa */
-  .sidebar{width:100%;max-height:220px;border-right:none;border-bottom:1px solid var(--slate-300);}
-  .sidebar-list{display:flex;flex-direction:row;flex-wrap:nowrap;overflow-x:auto;padding:4px 8px;}
-  .sidebar-item{min-width:120px;border-left:none;border-bottom:3px solid transparent;flex-direction:column;align-items:flex-start;gap:2px;padding:6px 8px;}
-  .sidebar-item.active{border-bottom-color:var(--green-500);}
-
-  /* Panels */
-  .panel{padding:12px;}
-  .panel-title{font-size:16px;}
-
-  /* Stats row — 2 columns on mobile */
-  .stats-row{grid-template-columns:1fr 1fr;}
-  .stat-value{font-size:20px;}
-
-  /* Cards grid — single column */
-  #dashboard-cards,#rutas-grid{grid-template-columns:1fr !important;}
-
-  /* Tables — hide less important columns on mobile */
-  .hide-mobile{display:none;}
-
-  /* Forms — single column */
-  .form-grid{grid-template-columns:1fr;}
-  .form-full{grid-column:1;}
-
-  /* Modal */
-  .modal{padding:16px;margin:8px;}
-
-  /* Map toolbar */
-  .map-toolbar{top:auto;bottom:80px;right:8px;}
-
-  /* Map legend — smaller */
-  .map-legend{bottom:8px;left:8px;font-size:11px;padding:8px 10px;}
-
-  /* Buttons — full width on forms */
-  .panel-header{flex-direction:column;align-items:flex-start;}
-  .panel-header .flex-gap{width:100%;}
-
-  /* Login box */
-  .login-box{width:90%;padding:24px;}
-}
-
-@media (max-width: 480px) {
-  .stats-row{grid-template-columns:1fr;}
-  .nav-tab{padding:7px 8px;font-size:10px;}
-  .topbar-logo img{display:none;}
-}
-</style>
-</head>
-<body>
-
-<!-- LOGIN -->
-<div id="login-screen">
-  <div class="login-box">
-    <div class="login-logo">
-      <img src="https://www.aborgama.com/logo_aborgama.png" alt="Aborgama" onerror="this.style.display='none'">
-    </div>
-    <div class="login-title">Gestión de Rutas</div>
-    <div class="login-sub">Ingresá tus credenciales para continuar</div>
-    <div class="login-group"><label class="login-label">Email</label>
-      <input class="login-input" id="login-user" type="email" placeholder="usuario@aborgama.com" autocomplete="username"></div>
-    <div class="login-group"><label class="login-label">Contraseña</label>
-      <input class="login-input" id="login-pass" type="password" placeholder="••••••••" autocomplete="current-password"></div>
-    <button class="login-btn" onclick="doLogin()">Ingresar</button>
-    <div class="login-error" id="login-error"></div>
-  </div>
-</div>
-
-<!-- APP -->
-<div id="app" style="display:none;flex-direction:column;height:100vh">
-
-  <div class="topbar">
-    <div class="topbar-logo">
-      <img src="https://www.aborgama.com/logo_aborgama.png" alt="Aborgama" onerror="this.style.display='none'">
-      Aborgama
-    </div>
-    <div class="topbar-divider"></div>
-    <span class="topbar-subtitle">Gestión de Rutas</span>
-    <div class="topbar-spacer"></div>
-    <div class="topbar-user" onclick="openCambiarClave()" title="Cambiar mi contraseña" style="margin-right:4px">
-      <span>🔑</span><span style="font-size:12px">Mi clave</span>
-    </div>
-    <div class="topbar-user" onclick="doLogout()">
-      <div class="topbar-avatar" id="topbar-avatar">?</div>
-      <span id="topbar-username">—</span>
-      <span style="opacity:.5;font-size:11px">↩ Salir</span>
-    </div>
-  </div>
-
-  <div class="nav-tabs">
-    <div class="nav-tab" data-tab="dashboard" onclick="showTab('dashboard')">📊 Dashboard</div>
-    <div class="nav-tab" data-tab="mapa"       onclick="showTab('mapa')">🗺️ Mapa</div>
-    <div class="nav-tab" data-tab="direcciones" onclick="showTab('direcciones')">📍 Direcciones</div>
-    <div class="nav-tab" data-tab="temporales"  onclick="showTab('temporales')">⏱ Temporales</div>
-    <div class="nav-tab" data-tab="rutas"       onclick="showTab('rutas')">🚛 Rutas</div>
-    <div class="nav-tab" data-tab="importar"    onclick="showTab('importar')">📥 Importar</div>
-    <div class="nav-tab" data-tab="exportar"    onclick="showTab('exportar')">📤 Exportar</div>
-    <div class="nav-tab" data-tab="usuarios"    onclick="showTab('usuarios')" id="tab-usuarios" style="display:none">👥 Usuarios</div>
-  </div>
-
-  <div class="main" id="main-area">
-
-    <!-- SIDEBAR (mapa) -->
-    <div class="sidebar" id="sidebar" style="display:none">
-      <div class="sidebar-header">
-        <span class="sidebar-title">Rutas visibles</span>
-        <span class="sidebar-count" id="sidebar-count">0</span>
-      </div>
-      <div class="sidebar-ctrl">
-        <button class="btn btn-sm btn-secondary" onclick="selectAllRutas()">Todas</button>
-        <button class="btn btn-sm btn-secondary" onclick="clearAllRutas()">Ninguna</button>
-        <button class="btn btn-sm btn-secondary" onclick="fitAllRoutes()">⊡ Ajustar</button>
-      </div>
-      <!-- Filtro por día -->
-      <div style="padding:8px 12px;border-bottom:1px solid var(--slate-100)">
-        <div style="font-size:11px;font-weight:700;color:var(--slate-500);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Filtrar por día</div>
-        <div style="display:flex;flex-wrap:wrap;gap:4px" id="dia-filter-btns">
-          <button class="dia-btn active" onclick="filtrarPorDia('')">Todos</button>
-          <button class="dia-btn" onclick="filtrarPorDia('lunes')">Lu</button>
-          <button class="dia-btn" onclick="filtrarPorDia('martes')">Ma</button>
-          <button class="dia-btn" onclick="filtrarPorDia('miercoles')">Mi</button>
-          <button class="dia-btn" onclick="filtrarPorDia('jueves')">Ju</button>
-          <button class="dia-btn" onclick="filtrarPorDia('viernes')">Vi</button>
-          <button class="dia-btn" onclick="filtrarPorDia('sabado')">Sa</button>
-          <button class="dia-btn" onclick="filtrarPorDia('domingo')">Do</button>
-        </div>
-        <div id="dia-filter-label" style="font-size:11px;color:var(--green-700);margin-top:4px;font-weight:600;min-height:14px"></div>
-      </div>
-      <div class="sidebar-list" id="sidebar-list"></div>
-    </div>
-
-    <div class="content">
-
-      <!-- DASHBOARD -->
-      <div class="panel active" id="panel-dashboard" style="background:var(--slate-100)">
-        <div class="stats-row" id="stats-row"></div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px" id="dashboard-cards"></div>
-      </div>
-
-      <!-- MAPA -->
-      <div class="map-wrap" id="panel-mapa">
-        <div id="map"></div>
-        <div class="map-toolbar">
-          <button class="map-btn" onclick="fitAllRoutes()">⊡ Ver todo</button>
-          <button class="map-btn" onclick="toggleLegend()">☰ Leyenda</button>
-        </div>
-        <div id="overlap-warnings"></div>
-        <div class="map-legend" id="map-legend">
-          <div class="legend-title">Rutas activas</div>
-          <div id="legend-items"></div>
-        </div>
-      </div>
-
-      <!-- DIRECCIONES -->
-      <div class="panel" id="panel-direcciones">
-        <div class="panel-header">
-          <div class="panel-title">Direcciones</div>
-          <div class="flex-gap">
-            <select class="form-select" id="dir-filter-ruta" style="width:160px" onchange="renderDirecciones()">
-              <option value="">Todas las rutas</option>
-            </select>
-            <input class="form-input" id="dir-filter" placeholder="Buscar..." style="width:180px" oninput="renderDirecciones()">
-            <button class="btn btn-primary" onclick="openDireccionModal()">+ Nueva</button>
-          </div>
-        </div>
-        <div class="table-wrap">
-          <table><thead><tr>
-            <th>Ruta</th><th>Cliente</th><th>Dirección</th><th>Vehículo</th>
-            <th>Matrícula</th><th>Chofer</th><th>Turno</th><th>Residuo</th>
-            <th>m³</th><th>Parada</th><th>Orden</th><th>Acciones</th>
-          </tr></thead>
-          <tbody id="tbody-direcciones"></tbody></table>
-        </div>
-      </div>
-
-      <!-- TEMPORALES -->
-      <div class="panel" id="panel-temporales">
-        <div class="panel-header">
-          <div class="panel-title">Paradas Temporales</div>
-          <button class="btn btn-primary" onclick="openTemporalModal()">+ Nueva temporal</button>
-        </div>
-        <div class="card" style="margin-bottom:14px;background:#fffbeb;border-color:#fde68a">
-          <p style="font-size:13px;color:#92400e">
-            💡 Las paradas temporales son visitas puntuales que <b>no quedan fijas en la ruta</b>. 
-            Al completarlas, si son recurrentes avanzan a la próxima fecha. 
-            Podés convertirlas en permanentes con el botón 📌 Fijar.
-          </p>
-        </div>
-        <div class="table-wrap">
-          <table><thead><tr>
-            <th>Ruta</th><th>Cliente</th><th>Dirección</th>
-            <th>Fecha</th><th>Frecuencia</th><th>Estado</th><th>Acciones</th>
-          </tr></thead>
-          <tbody id="tbody-temporales"></tbody></table>
-        </div>
-      </div>
-
-      <!-- RUTAS -->
-      <div class="panel" id="panel-rutas">
-        <div class="panel-header">
-          <div class="panel-title">Rutas</div>
-          <button class="btn btn-primary" onclick="openRutaModal()">+ Nueva ruta</button>
-        </div>
-        <!-- Filtro por día en Rutas -->
-        <div class="card" style="margin-bottom:14px;padding:12px 16px">
-          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-            <span style="font-size:12px;font-weight:700;color:var(--slate-700)">Ver clientes del día:</span>
-            <div style="display:flex;flex-wrap:wrap;gap:4px" id="dia-filter-rutas-btns">
-              <button class="dia-btn active" onclick="filtrarRutasPorDia('')">Todos</button>
-              <button class="dia-btn" onclick="filtrarRutasPorDia('lunes')">Lunes</button>
-              <button class="dia-btn" onclick="filtrarRutasPorDia('martes')">Martes</button>
-              <button class="dia-btn" onclick="filtrarRutasPorDia('miercoles')">Miércoles</button>
-              <button class="dia-btn" onclick="filtrarRutasPorDia('jueves')">Jueves</button>
-              <button class="dia-btn" onclick="filtrarRutasPorDia('viernes')">Viernes</button>
-              <button class="dia-btn" onclick="filtrarRutasPorDia('sabado')">Sábado</button>
-              <button class="dia-btn" onclick="filtrarRutasPorDia('domingo')">Domingo</button>
-            </div>
-          </div>
-        </div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px" id="rutas-grid"></div>
-      </div>
-
-      <!-- IMPORTAR -->
-      <div class="panel" id="panel-importar">
-        <div class="panel-header"><div class="panel-title">Importar Clientes</div></div>
-        <div class="card">
-          <div class="card-header">
-            <div class="card-title">📋 Formato del archivo</div>
-            <button class="btn btn-secondary btn-sm" onclick="descargarTemplate()">⬇ Descargar Template Excel</button>
-          </div>
-          <p style="font-size:13px;color:var(--slate-700);margin-bottom:10px">El archivo debe tener estas columnas exactas (los marcados con * son obligatorios):</p>
-          <div style="background:var(--slate-100);border-radius:8px;padding:12px;font-family:'DM Mono',monospace;font-size:11px;color:var(--slate-700);overflow-x:auto;line-height:1.8">
-            <span style="color:var(--red);font-weight:700">nombre*</span> | <span style="color:var(--red);font-weight:700">direccion*</span> | <span style="color:var(--red);font-weight:700">m3_promedio*</span> | <span style="color:var(--red);font-weight:700">frecuencia*</span> | tipo_residuo | vehiculo_pref | chofer | cargador | matricula | turno | parada_max_min | notas
-          </div>
-          <div style="margin-top:10px;font-size:12px;color:var(--slate-500);line-height:1.7">
-            • <b>m3_promedio</b>: metros cúbicos POR VISITA (no mensual)<br>
-            • <b>frecuencia</b>: ej. "Lunes a Viernes", "Lunes Miércoles y Viernes", "3 veces por semana", "Semanal"<br>
-            • <b>vehiculo_pref</b>: Furgón (máx 30m³) / Prensa (máx 90m³) / Auto-asignar<br>
-            • <b>tipo_residuo</b>: Comercial / Hospitalario / Industrial / Reciclados / Especial<br>
-            • Aceptamos <b>.xlsx</b> y <b>.csv</b>. Con K-Means auto la app agrupa por zona geográfica.
-          </div>
-        </div>
-        <div class="card" style="margin-top:14px">
-          <div class="card-header"><div class="card-title">📂 Cargar archivo</div></div>
-          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-            <label style="cursor:pointer">
-              <input type="file" id="import-file" accept=".csv,.txt,.xlsx,.xls" style="display:none" onchange="previewImport(this)">
-              <div class="btn btn-secondary">📂 Seleccionar archivo (CSV o Excel)</div>
-            </label>
-            <span id="import-filename" style="font-size:13px;color:var(--slate-500)">Ningún archivo seleccionado</span>
-          </div>
-          <div id="import-preview" style="margin-top:16px;display:none">
-            <div style="font-size:13px;font-weight:600;margin-bottom:8px" id="import-preview-title"></div>
-            <div class="table-wrap" style="max-height:200px;overflow-y:auto">
-              <table><thead><tr id="import-preview-head"></tr></thead>
-              <tbody id="import-preview-body"></tbody></table>
-            </div>
-            <div style="margin-top:14px;display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap">
-              <div class="form-group" style="min-width:260px">
-                <label class="form-label">Asignación de rutas</label>
-                <select class="form-select" id="import-ruta-sel"></select>
-                <span class="form-hint">K-Means agrupa geográficamente considerando m³ y capacidad</span>
-              </div>
-              <button class="btn btn-primary" onclick="ejecutarImport()">⚡ Importar <span id="import-count-btn"></span></button>
-            </div>
-          </div>
-          <div id="import-result" style="margin-top:12px"></div>
-        </div>
-      </div>
-
-      <!-- EXPORTAR -->
-      <div class="panel" id="panel-exportar">
-        <div class="panel-header"><div class="panel-title">Exportar Rutas</div></div>
-        <div class="card">
-          <div class="card-header"><div class="card-title">Seleccioná la ruta</div></div>
-          <div class="form-group" style="max-width:300px;margin-bottom:16px">
-            <label class="form-label">Ruta</label>
-            <select class="form-select" id="export-ruta-sel">
-              <option value="">— Todas las rutas —</option>
-            </select>
-          </div>
-          <div class="flex-gap">
-            <button class="btn btn-primary" onclick="exportarExcel()">📊 Exportar Excel</button>
-            <button class="btn btn-secondary" onclick="exportarCSV()">⬇ Exportar CSV</button>
-            <button class="btn btn-secondary" onclick="exportarHTML()">🖨 Imprimir</button>
-          </div>
-          <p class="form-hint mt-2">Excel incluye hoja de detalle + hoja de resumen por ruta. Ordenado por punto de recolección.</p>
-        </div>
-        <div class="card" style="margin-top:14px">
-          <div class="card-header"><div class="card-title">Alertas activas</div></div>
-          <div id="export-alerts"></div>
-        </div>
-      </div>
-
-      <!-- USUARIOS -->
-      <div class="panel" id="panel-usuarios">
-        <div class="panel-header">
-          <div class="panel-title">Usuarios</div>
-          <button class="btn btn-primary" onclick="openUsuarioModal()">+ Nuevo usuario</button>
-        </div>
-        <div class="table-wrap">
-          <table><thead><tr><th>Email</th><th>Rol</th><th>Acciones</th></tr></thead>
-          <tbody id="tbody-usuarios"></tbody></table>
-        </div>
-      </div>
-
-    </div><!-- /content -->
-  </div><!-- /main -->
-</div><!-- /app -->
-
-<!-- MODAL DIRECCIÓN -->
-<div class="modal-overlay" id="modal-dir">
-  <div class="modal">
-    <div class="modal-title">📍 <span id="modal-dir-title">Nueva Dirección</span></div>
-    <input type="hidden" id="dir-edit-id">
-    <div class="form-grid">
-      <div class="form-group"><label class="form-label">Ruta *</label><select class="form-select" id="dir-ruta"></select></div>
-      <div class="form-group"><label class="form-label">Cliente *</label><input class="form-input" id="dir-cliente" placeholder="Empresa S.A."></div>
-      <div class="form-group form-full"><label class="form-label">Dirección *</label>
-        <input class="form-input" id="dir-direccion" placeholder="Av. 18 de Julio 1234, Montevideo">
-        <span class="form-hint">Se geocodifica automáticamente para el mapa</span></div>
-      <div class="form-group"><label class="form-label">Vehículo</label>
-        <select class="form-select" id="dir-vehiculo"><option>Furgón</option><option>Prensa</option></select></div>
-      <div class="form-group"><label class="form-label">Matrícula</label><input class="form-input" id="dir-matricula" placeholder="ABC 1234"></div>
-      <div class="form-group"><label class="form-label">Chofer</label><input class="form-input" id="dir-chofer"></div>
-      <div class="form-group"><label class="form-label">Cargador</label><input class="form-input" id="dir-cargador"></div>
-      <div class="form-group"><label class="form-label">Turno</label>
-        <select class="form-select" id="dir-turno"><option>Mañana</option><option>Tarde</option><option>Noche</option></select></div>
-      <div class="form-group"><label class="form-label">Tipo de Residuo</label>
-        <select class="form-select" id="dir-residuo"><option>Comercial</option><option>Hospitalario</option><option>Industrial</option><option>Reciclados</option><option>Especial</option></select></div>
-      <div class="form-group"><label class="form-label">Frecuencia</label>
-        <select class="form-select" id="dir-frecuencia">
-          <option value="">— Seleccionar —</option>
-          <option>Todos los días</option><option>Lunes a Viernes</option>
-          <option>Lunes Miércoles y Viernes</option><option>Martes y Jueves</option>
-          <option>Lunes y Viernes</option><option>Solo los lunes</option>
-          <option>Solo los martes</option><option>Solo los miércoles</option>
-          <option>Solo los jueves</option><option>Solo los viernes</option>
-          <option>3 veces por semana</option><option>2 veces por semana</option>
-          <option>Semanal</option><option>Quincenal</option><option>Mensual</option>
-        </select></div>
-      <div class="form-group"><label class="form-label">m³ promedio mensual</label><input class="form-input" id="dir-m3" type="number" value="0" min="0" step="0.1"></div>
-      <div class="form-group"><label class="form-label">Máx. Parada (min)</label><input class="form-input" id="dir-parada" type="number" value="5" min="1"></div>
-      <div class="form-group"><label class="form-label">Orden en ruta</label><input class="form-input" id="dir-orden" type="number" value="999" min="1"></div>
-    </div>
-    <div class="modal-actions">
-      <button class="btn btn-secondary" onclick="closeModal('modal-dir')">Cancelar</button>
-      <button class="btn btn-primary" onclick="saveDireccion()">Guardar</button>
-    </div>
-  </div>
-</div>
-
-<!-- MODAL TEMPORAL -->
-<div class="modal-overlay" id="modal-temporal">
-  <div class="modal" style="max-width:500px">
-    <div class="modal-title">⏱ Nueva Parada Temporal</div>
-    <div class="form-grid" style="grid-template-columns:1fr 1fr">
-      <div class="form-group"><label class="form-label">Ruta *</label><select class="form-select" id="temp-ruta"></select></div>
-      <div class="form-group"><label class="form-label">Cliente *</label><input class="form-input" id="temp-cliente" placeholder="Empresa S.A."></div>
-      <div class="form-group form-full"><label class="form-label">Dirección *</label><input class="form-input" id="temp-direccion" placeholder="Dirección completa"></div>
-      <div class="form-group"><label class="form-label">Fecha</label><input class="form-input" id="temp-fecha" type="date"></div>
-      <div class="form-group"><label class="form-label">Frecuencia</label>
-        <select class="form-select" id="temp-frecuencia">
-          <option>Una vez</option><option>Semanal</option><option>Quincenal</option><option>Mensual</option>
-        </select></div>
-      <div class="form-group form-full"><label class="form-label">Notas</label><input class="form-input" id="temp-notas" placeholder="Observaciones opcionales"></div>
-    </div>
-    <div class="modal-actions">
-      <button class="btn btn-secondary" onclick="closeModal('modal-temporal')">Cancelar</button>
-      <button class="btn btn-primary" onclick="saveTemporal()">Guardar</button>
-    </div>
-  </div>
-</div>
-
-<!-- MODAL RUTA -->
-<div class="modal-overlay" id="modal-ruta">
-  <div class="modal" style="max-width:460px">
-    <div class="modal-title">🚛 <span id="modal-ruta-title">Nueva Ruta</span></div>
-    <input type="hidden" id="ruta-edit-id">
-    <div class="form-grid">
-      <div class="form-group"><label class="form-label">Nombre *</label><input class="form-input" id="ruta-nombre" placeholder="RUTA 1, COMCAR…"></div>
-      <div class="form-group"><label class="form-label">Tipo</label>
-        <select class="form-select" id="ruta-tipo"><option>Comercial</option><option>Hospitalaria</option><option>Industrial</option><option>Reciclados</option></select></div>
-      <div class="form-group"><label class="form-label">Vehículo</label>
-        <select class="form-select" id="ruta-vehiculo"><option value="Furgón">Furgón (máx 30 m³)</option><option value="Prensa">Prensa (máx 90 m³)</option></select></div>
-      <div class="form-group"><label class="form-label">Color en mapa</label><input class="form-input" id="ruta-color" type="color" value="#4caf50" style="padding:4px;height:38px"></div>
-      <div class="form-group"><label class="form-label">Activa</label>
-        <select class="form-select" id="ruta-activa"><option value="SI">SI</option><option value="NO">NO</option></select></div>
-    </div>
-    <div class="modal-actions">
-      <button class="btn btn-secondary" onclick="closeModal('modal-ruta')">Cancelar</button>
-      <button class="btn btn-primary" onclick="saveRuta()">Guardar</button>
-    </div>
-  </div>
-</div>
-
-<!-- MODAL USUARIO -->
-<div class="modal-overlay" id="modal-usuario">
-  <div class="modal" style="max-width:400px">
-    <div class="modal-title">👤 Nuevo Usuario</div>
-    <div style="display:flex;flex-direction:column;gap:14px">
-      <div class="form-group"><label class="form-label">Email *</label><input class="form-input" id="usr-email" type="email" placeholder="nombre@aborgama.com"></div>
-      <div class="form-group"><label class="form-label">Contraseña *</label><input class="form-input" id="usr-pass" type="password" placeholder="Mínimo 6 caracteres"></div>
-      <div class="form-group"><label class="form-label">Rol</label>
-        <select class="form-select" id="usr-rol"><option value="operador">Operador</option><option value="master">Master (admin)</option></select></div>
-    </div>
-    <div class="modal-actions">
-      <button class="btn btn-secondary" onclick="closeModal('modal-usuario')">Cancelar</button>
-      <button class="btn btn-primary" onclick="saveUsuario()">Crear usuario</button>
-    </div>
-  </div>
-</div>
-
-<!-- MODAL CAMBIAR CLAVE -->
-<div class="modal-overlay" id="modal-clave">
-  <div class="modal" style="max-width:400px">
-    <div class="modal-title">🔑 <span id="clave-modal-title">Cambiar contraseña</span></div>
-    <input type="hidden" id="clave-target-id">
-    <div style="display:flex;flex-direction:column;gap:14px">
-      <div class="form-group" id="clave-actual-group">
-        <label class="form-label">Contraseña actual</label>
-        <input class="form-input" id="clave-actual" type="password" placeholder="••••••••">
-      </div>
-      <div class="form-group"><label class="form-label">Nueva contraseña</label><input class="form-input" id="clave-nueva" type="password" placeholder="Mínimo 6 caracteres"></div>
-      <div class="form-group"><label class="form-label">Confirmar nueva contraseña</label><input class="form-input" id="clave-confirmar" type="password"></div>
-      <div style="font-size:13px;color:var(--red);min-height:18px" id="clave-error"></div>
-    </div>
-    <div class="modal-actions">
-      <button class="btn btn-secondary" onclick="closeModal('modal-clave')">Cancelar</button>
-      <button class="btn btn-primary" onclick="saveClave()">Guardar contraseña</button>
-    </div>
-  </div>
-</div>
-
 </body>
 </html>
