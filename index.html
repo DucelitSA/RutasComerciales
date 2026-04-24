@@ -826,9 +826,13 @@ auth.onAuthStateChanged(async user => {
       myRole    = snap.data().rol || 'operador';
       myModulos = snap.data().modulos || 'rutas';
     }
+    hide('screen-login');
     showPortalScreen();
   } else {
     me = null;
+    hide('screen-portal');
+    hide('screen-rutas');
+    hide('screen-taller');
     show('screen-login');
   }
 });
@@ -860,7 +864,11 @@ document.addEventListener('DOMContentLoaded', () => {
 //  PORTAL
 // ═══════════════════════════════════════════════
 function showPortalScreen() {
+  hide('screen-login');
+  hide('screen-rutas');
+  hide('screen-taller');
   show('screen-portal');
+  window.scrollTo(0,0);
   document.getElementById('portal-name').textContent = me.email.split('@')[0];
   // Show/hide modules based on permissions
   const hasRutas  = ['rutas','ambos','master'].includes(myModulos) || myRole==='master';
@@ -871,7 +879,9 @@ function showPortalScreen() {
 
 window.showPortal = () => {
   hide('screen-rutas');
+  hide('screen-taller');
   show('screen-portal');
+  window.scrollTo(0,0);
 };
 
 window.enterModule = mod => {
