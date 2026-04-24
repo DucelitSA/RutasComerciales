@@ -280,11 +280,11 @@ tr:hover td{background:var(--s0);}
       <p>Gestión de rutas, clientes y recolección</p>
       <span class="portal-badge">Módulo Rutas</span>
     </div>
-    <div class="portal-card disabled" id="portal-taller" onclick="enterModule('taller')">
+    <div class="portal-card" id="portal-taller" onclick="enterModule('taller')">
       <div class="portal-icon">🔧</div>
       <h2>Taller & Flota</h2>
       <p>Mantenimiento, horas y reparaciones</p>
-      <span class="portal-badge" style="background:#e3f2fd;color:var(--blue)">Próximamente</span>
+      <span class="portal-badge" style="background:#e3f2fd;color:var(--blue)">Módulo Taller</span>
     </div>
   </div>
   <span class="portal-logout" onclick="doLogout()">↩ Cerrar sesión</span>
@@ -836,9 +836,15 @@ auth.onAuthStateChanged(async user => {
 window.doLogin = async () => {
   const email = gv('li-email').trim();
   const pass  = gv('li-pass');
-  document.getElementById('li-error').textContent = '';
-  try { await auth.signInWithEmailAndPassword(email, pass); }
-  catch(e) { document.getElementById('li-error').textContent = 'Email o contraseña incorrectos.'; }
+  const errEl = document.getElementById('li-error');
+  errEl.textContent = 'Intentando...';
+  try {
+    await auth.signInWithEmailAndPassword(email, pass);
+    errEl.textContent = '';
+  } catch(e) {
+    console.error('Firebase Auth Error:', e.code, e.message);
+    errEl.textContent = 'Error: ' + e.code + ' — ' + e.message;
+  }
 };
 window.doLogout = () => auth.signOut();
 
@@ -878,6 +884,8 @@ window.enterModule = mod => {
     initMap();
     listenData();
     showTab('dashboard');
+  } else if (mod === 'taller') {
+    enterTaller();
   }
 };
 
@@ -1856,10 +1864,1076 @@ function parseCSV(text){
   }).filter(r=>r.nombre||r.cliente);
 }
 
+<!-- ═══ MÓDULO TALLER ═══ -->
+<div id="screen-taller" style="display:none;flex-direction:column;height:100vh;">
+
+  <div class="topbar">
+    <img class="topbar-logo" src="https://www.aborgama.com/logo_aborgama.png" alt="" onerror="this.style.display='none'">
+    <div class="topbar-divider"></div>
+    <span class="topbar-title">Taller & Flota</span>
+    <div class="topbar-spacer"></div>
+    <button class="topbar-btn" onclick="showPortal()" title="Volver al portal"><span>⬅</span><span class="btn-text">Portal</span></button>
+    <button class="topbar-btn" onclick="openCambiarClave()"><span>🔑</span><span class="btn-text">Mi clave</span></button>
+    <button class="topbar-btn" onclick="doLogout()">
+      <div class="topbar-avatar" id="tb-avatar-t">?</div>
+      <span class="btn-text" id="tb-user-t">—</span>
+    </button>
+  </div>
+
+  <!-- NAV — full for jefes, limited for mecánicos -->
+  <div class="nav" id="taller-nav">
+    <div class="nav-item active" data-ttab="t-dashboard" onclick="showTTab('t-dashboard')">📊 Dashboard</div>
+    <div class="nav-item" data-ttab="t-registro"  onclick="showTTab('t-registro')">🔧 Registrar trabajo</div>
+    <div class="nav-item t-jefe-only" data-ttab="t-historial" onclick="showTTab('t-historial')">📋 Historial</div>
+    <div class="nav-item t-jefe-only" data-ttab="t-flota"    onclick="showTTab('t-flota')">🚛 Flota</div>
+    <div class="nav-item t-jefe-only" data-ttab="t-preventivo" onclick="showTTab('t-preventivo')">🔔 Preventivo</div>
+    <div class="nav-item t-jefe-only" data-ttab="t-personal"  onclick="showTTab('t-personal')">👤 Personal</div>
+    <div class="nav-item t-jefe-only" data-ttab="t-consumibles" onclick="showTTab('t-consumibles')">📦 Consumibles</div>
+  </div>
+
+  <div class="layout">
+    <div class="content" style="overflow:hidden;display:flex;flex-direction:column;">
+
+      <!-- DASHBOARD TALLER -->
+      <div class="panel active" id="panel-t-dashboard">
+        <div class="ph">
+          <div class="ph-title">Dashboard Taller</div>
+          <div class="flex-gap">
+            <select class="finput" id="t-fil-vehiculo" style="width:160px" onchange="renderTDash()">
+              <option value="">Todos los vehículos</option>
+            </select>
+            <input class="finput" id="t-fil-desde" type="date" onchange="renderTDash()" style="width:140px">
+            <input class="finput" id="t-fil-hasta" type="date" onchange="renderTDash()" style="width:140px">
+            <button class="btn btn-secondary btn-sm" onclick="clearTFiltros()">✕ Limpiar</button>
+          </div>
+        </div>
+        <div class="stats" id="t-stats"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px" id="t-dash-top"></div>
+        <!-- Alertas preventivo -->
+        <div id="t-alertas-prev" style="margin-bottom:16px"></div>
+        <div class="cards-grid" id="t-dash-cards"></div>
+      </div>
+
+      <!-- REGISTRO DE TRABAJO -->
+      <div class="panel" id="panel-t-registro">
+        <div class="ph"><div class="ph-title">Registrar Trabajo</div></div>
+        <div class="card" style="max-width:600px">
+          <div class="form-grid">
+            <div class="fg">
+              <label class="flabel">Fecha *</label>
+              <input class="finput" id="reg-fecha" type="date">
+            </div>
+            <div class="fg">
+              <label class="flabel">Mecánico *</label>
+              <select class="fselect" id="reg-mecanico"></select>
+            </div>
+            <div class="fg">
+              <label class="flabel">Vehículo / Matrícula *</label>
+              <select class="fselect" id="reg-vehiculo"></select>
+            </div>
+            <div class="fg">
+              <label class="flabel">Horas trabajadas *</label>
+              <input class="finput" id="reg-horas" type="number" min="0.5" max="24" step="0.5" placeholder="ej: 3.5">
+            </div>
+            <div class="fg form-full">
+              <label class="flabel">Tareas realizadas *</label>
+              <textarea class="finput" id="reg-tareas" rows="3" placeholder="Describí las tareas realizadas..." style="resize:vertical"></textarea>
+            </div>
+            <div class="fg form-full">
+              <label class="flabel">Consumibles utilizados</label>
+              <div id="reg-consumibles-list" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"></div>
+              <select class="fselect" id="reg-cons-sel" onchange="addConsumible(this)">
+                <option value="">+ Agregar consumible...</option>
+              </select>
+            </div>
+            <div class="fg">
+              <label class="flabel">Km actuales del vehículo</label>
+              <input class="finput" id="reg-km" type="number" min="0" placeholder="ej: 145000">
+            </div>
+            <div class="fg">
+              <label class="flabel">Costo consumibles (UYU)</label>
+              <input class="finput" id="reg-costo-cons" type="number" min="0" placeholder="0">
+            </div>
+            <div class="fg form-full">
+              <label class="flabel">Observaciones</label>
+              <input class="finput" id="reg-obs" placeholder="Notas adicionales opcionales">
+            </div>
+          </div>
+          <div id="reg-costo-resumen" style="background:var(--g0);border-radius:8px;padding:12px;margin-top:12px;font-size:13px;display:none">
+            <div style="font-weight:700;margin-bottom:4px">Resumen de costos estimados:</div>
+            <div id="reg-costo-detalle"></div>
+          </div>
+          <div class="modal-actions" style="justify-content:flex-start;margin-top:16px">
+            <button class="btn btn-primary" onclick="saveRegistro()">💾 Guardar registro</button>
+            <button class="btn btn-secondary" onclick="clearRegistro()">✕ Limpiar</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- HISTORIAL -->
+      <div class="panel" id="panel-t-historial">
+        <div class="ph">
+          <div class="ph-title">Historial de Trabajos</div>
+          <div class="flex-gap">
+            <select class="finput" id="hist-fil-veh" style="width:150px" onchange="renderHistorial()"><option value="">Todos los vehículos</option></select>
+            <select class="finput" id="hist-fil-mec" style="width:150px" onchange="renderHistorial()"><option value="">Todos los mecánicos</option></select>
+            <input class="finput" id="hist-fil-desde" type="date" onchange="renderHistorial()" style="width:140px">
+            <input class="finput" id="hist-fil-hasta" type="date" onchange="renderHistorial()" style="width:140px">
+          </div>
+        </div>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr>
+              <th>Fecha</th><th>Mecánico</th><th>Vehículo</th><th class="hide-mobile">Tareas</th>
+              <th class="hide-mobile">Consumibles</th><th>Horas</th><th>Km</th>
+              <th class="hide-mobile">Costo MO</th><th class="hide-mobile">Costo Cons.</th><th>Total</th><th>Acciones</th>
+            </tr></thead>
+            <tbody id="hist-tbody"></tbody>
+          </table>
+        </div>
+        <div id="hist-total" style="text-align:right;padding:10px 12px;font-weight:700;font-size:14px;color:var(--g7)"></div>
+      </div>
+
+      <!-- FLOTA -->
+      <div class="panel" id="panel-t-flota">
+        <div class="ph">
+          <div class="ph-title">Flota de Vehículos</div>
+          <button class="btn btn-primary" onclick="openVehModal()">+ Nuevo vehículo</button>
+        </div>
+        <div class="cards-grid" id="flota-grid"></div>
+      </div>
+
+      <!-- MANTENIMIENTO PREVENTIVO -->
+      <div class="panel" id="panel-t-preventivo">
+        <div class="ph">
+          <div class="ph-title">Mantenimiento Preventivo</div>
+          <button class="btn btn-primary" onclick="openPrevModal()">+ Nueva tarea preventiva</button>
+        </div>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Vehículo</th><th>Tarea</th><th>Cada (km)</th><th>Cada (días)</th><th>Último km</th><th>Última fecha</th><th>Próximo km</th><th>Próxima fecha</th><th>Estado</th><th>Acciones</th></tr></thead>
+            <tbody id="prev-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- PERSONAL / MECÁNICOS -->
+      <div class="panel" id="panel-t-personal">
+        <div class="ph">
+          <div class="ph-title">Personal</div>
+          <button class="btn btn-primary" onclick="openPersonalModal()">+ Nuevo mecánico</button>
+        </div>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Nombre</th><th>Rol</th><th>Sueldo mensual</th><th>Valor hora</th><th>Email app</th><th>Acciones</th></tr></thead>
+            <tbody id="personal-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- CONSUMIBLES -->
+      <div class="panel" id="panel-t-consumibles">
+        <div class="ph">
+          <div class="ph-title">Consumibles</div>
+          <button class="btn btn-primary" onclick="openConsModal()">+ Nuevo consumible</button>
+        </div>
+        <div class="cards-grid" id="cons-grid"></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Vehículo -->
+<div class="modal-ov" id="modal-veh">
+  <div class="modal modal-sm">
+    <div class="modal-title">🚛 <span id="modal-veh-title">Nuevo Vehículo</span></div>
+    <input type="hidden" id="veh-id">
+    <div class="form-grid">
+      <div class="fg"><label class="flabel">Matrícula *</label><input class="finput" id="veh-matricula" placeholder="STP-1234"></div>
+      <div class="fg"><label class="flabel">Tipo</label>
+        <select class="fselect" id="veh-tipo">
+          <option>Camión Prensa</option><option>Furgón</option><option>Camioneta</option>
+          <option>Auto</option><option>Maquinaria</option><option>Otro</option>
+        </select>
+      </div>
+      <div class="fg"><label class="flabel">Marca</label><input class="finput" id="veh-marca" placeholder="Mercedes, Iveco..."></div>
+      <div class="fg"><label class="flabel">Modelo</label><input class="finput" id="veh-modelo" placeholder="Actros, Daily..."></div>
+      <div class="fg"><label class="flabel">Año</label><input class="finput" id="veh-año" type="number" placeholder="2018"></div>
+      <div class="fg"><label class="flabel">Km actuales</label><input class="finput" id="veh-km" type="number" placeholder="0"></div>
+      <div class="fg"><label class="flabel">Estado</label>
+        <select class="fselect" id="veh-estado">
+          <option value="operativo">Operativo</option>
+          <option value="taller">En taller</option>
+          <option value="inactivo">Inactivo</option>
+        </select>
+      </div>
+      <div class="fg"><label class="flabel">Vence revisión</label><input class="finput" id="veh-revision" type="date"></div>
+      <div class="fg"><label class="flabel">Vence seguro</label><input class="finput" id="veh-seguro" type="date"></div>
+      <div class="fg"><label class="flabel">Vence habilitación</label><input class="finput" id="veh-habilitacion" type="date"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal('modal-veh')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveVeh()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Preventivo -->
+<div class="modal-ov" id="modal-prev">
+  <div class="modal modal-sm">
+    <div class="modal-title">🔔 <span id="modal-prev-title">Nueva Tarea Preventiva</span></div>
+    <input type="hidden" id="prev-id">
+    <div class="form-grid" style="grid-template-columns:1fr">
+      <div class="fg"><label class="flabel">Vehículo *</label><select class="fselect" id="prev-veh"></select></div>
+      <div class="fg"><label class="flabel">Tarea *</label><input class="finput" id="prev-tarea" placeholder="ej: Cambio de aceite"></div>
+      <div class="fg"><label class="flabel">Cada (km) — dejar 0 si no aplica</label><input class="finput" id="prev-km-intervalo" type="number" min="0" placeholder="10000"></div>
+      <div class="fg"><label class="flabel">Cada (días) — dejar 0 si no aplica</label><input class="finput" id="prev-dias-intervalo" type="number" min="0" placeholder="180"></div>
+      <div class="fg"><label class="flabel">Último mantenimiento (km)</label><input class="finput" id="prev-ultimo-km" type="number" min="0" placeholder="0"></div>
+      <div class="fg"><label class="flabel">Última fecha de mantenimiento</label><input class="finput" id="prev-ultima-fecha" type="date"></div>
+      <div class="fg"><label class="flabel">Notas</label><input class="finput" id="prev-notas" placeholder="Observaciones opcionales"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal('modal-prev')">Cancelar</button>
+      <button class="btn btn-primary" onclick="savePrev()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Personal -->
+<div class="modal-ov" id="modal-personal">
+  <div class="modal modal-sm">
+    <div class="modal-title">👤 <span id="modal-personal-title">Nuevo Mecánico</span></div>
+    <input type="hidden" id="pers-id">
+    <div class="form-grid" style="grid-template-columns:1fr">
+      <div class="fg"><label class="flabel">Nombre completo *</label><input class="finput" id="pers-nombre" placeholder="Juan Pérez"></div>
+      <div class="fg"><label class="flabel">Rol</label>
+        <select class="fselect" id="pers-rol">
+          <option value="mecanico">Mecánico</option>
+          <option value="jefe">Jefe de Taller</option>
+        </select>
+      </div>
+      <div class="fg"><label class="flabel">Sueldo mensual (UYU) *</label>
+        <input class="finput" id="pers-sueldo" type="number" min="0" placeholder="50000" oninput="calcValorHora()">
+        <span class="fhint" id="pers-vh-preview">Valor hora: —</span>
+      </div>
+      <div class="fg"><label class="flabel">Email (para acceso a la app)</label><input class="finput" id="pers-email" type="email" placeholder="juan@aborgama.com"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal('modal-personal')">Cancelar</button>
+      <button class="btn btn-primary" onclick="savePersonal()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Consumible -->
+<div class="modal-ov" id="modal-cons">
+  <div class="modal modal-sm">
+    <div class="modal-title">📦 <span id="modal-cons-title">Nuevo Consumible</span></div>
+    <input type="hidden" id="cons-id">
+    <div class="form-grid" style="grid-template-columns:1fr">
+      <div class="fg"><label class="flabel">Nombre *</label><input class="finput" id="cons-nombre" placeholder="ej: Aceite 15W-40"></div>
+      <div class="fg"><label class="flabel">Categoría</label>
+        <select class="fselect" id="cons-cat">
+          <option>Lubricantes</option><option>Filtros</option><option>Frenos</option>
+          <option>Correas y cadenas</option><option>Neumáticos</option><option>Eléctrico</option>
+          <option>Refrigeración</option><option>Carrocería</option><option>Otros</option>
+        </select>
+      </div>
+      <div class="fg"><label class="flabel">Unidad</label>
+        <select class="fselect" id="cons-unidad">
+          <option>litro</option><option>unidad</option><option>kg</option><option>metro</option><option>juego</option>
+        </select>
+      </div>
+      <div class="fg"><label class="flabel">Precio unitario aprox. (UYU)</label><input class="finput" id="cons-precio" type="number" min="0" placeholder="0"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal('modal-cons')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveCons()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Ver registro -->
+<div class="modal-ov" id="modal-reg-view">
+  <div class="modal">
+    <div class="modal-title">📋 Detalle de Registro</div>
+    <div id="reg-view-content"></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal('modal-reg-view')">Cerrar</button>
+      <button class="btn btn-danger btn-sm" id="reg-view-del" onclick="">🗑 Eliminar</button>
+    </div>
+  </div>
+</div>
+
+<style>
+/* ═══ TALLER EXTRA STYLES ═══ */
+.t-status-op{background:#e8f5e9;color:#2d6a2d;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;}
+.t-status-taller{background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;}
+.t-status-inact{background:var(--redl);color:var(--red);padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;}
+.t-alerta-ok{background:var(--g1);border:1px solid #a5d6a7;border-radius:8px;padding:10px 14px;font-size:12px;color:var(--g7);}
+.t-alerta-warn{background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:10px 14px;font-size:12px;color:#92400e;}
+.t-alerta-crit{background:var(--redl);border:1px solid #fca5a5;border-radius:8px;padding:10px 14px;font-size:12px;color:var(--red);}
+.cons-chip{display:inline-flex;align-items:center;gap:4px;background:var(--g1);color:var(--g7);border-radius:20px;padding:3px 10px;font-size:11px;font-weight:600;}
+.cons-chip button{background:none;border:none;cursor:pointer;color:var(--g7);font-size:13px;line-height:1;padding:0 0 0 2px;}
+.bell-badge{position:fixed;top:54px;right:16px;background:var(--red);color:#fff;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;z-index:300;display:none;}
+textarea.finput{font-family:inherit;}
+</style>
+
+<script>
+// ═══════════════════════════════════════════════
+//  TALLER STATE
+// ═══════════════════════════════════════════════
+let tVehiculos=[], tPersonal=[], tRegistros=[], tPreventivos=[], tConsumibles=[];
+let tListeners=[];
+let myTallerRole='mecanico'; // 'mecanico' | 'jefe' | 'master'
+let regConsumiblesSeleccionados=[]; // [{id, nombre, unidad, precio}]
+
+const CONS_DEFAULT=[
+  {nombre:'Aceite 15W-40',cat:'Lubricantes',unidad:'litro',precio:250},
+  {nombre:'Aceite 5W-30 sintético',cat:'Lubricantes',unidad:'litro',precio:380},
+  {nombre:'Filtro de aceite',cat:'Filtros',unidad:'unidad',precio:450},
+  {nombre:'Filtro de aire',cat:'Filtros',unidad:'unidad',precio:600},
+  {nombre:'Filtro de combustible',cat:'Filtros',unidad:'unidad',precio:550},
+  {nombre:'Pastillas de freno',cat:'Frenos',unidad:'juego',precio:2800},
+  {nombre:'Disco de freno',cat:'Frenos',unidad:'unidad',precio:4500},
+  {nombre:'Líquido de frenos',cat:'Frenos',unidad:'litro',precio:350},
+  {nombre:'Correa de distribución',cat:'Correas y cadenas',unidad:'unidad',precio:3200},
+  {nombre:'Correa alternador',cat:'Correas y cadenas',unidad:'unidad',precio:850},
+  {nombre:'Refrigerante',cat:'Refrigeración',unidad:'litro',precio:280},
+  {nombre:'Batería 12V',cat:'Eléctrico',unidad:'unidad',precio:6500},
+  {nombre:'Bujías',cat:'Eléctrico',unidad:'juego',precio:1200},
+  {nombre:'Neumático',cat:'Neumáticos',unidad:'unidad',precio:12000},
+];
+
+// ═══════════════════════════════════════════════
+//  TALLER INIT
+// ═══════════════════════════════════════════════
+function enterTaller() {
+  hide('screen-portal');
+  const el = document.getElementById('screen-taller');
+  el.style.display = 'flex';
+  document.getElementById('tb-user-t').textContent = me.email.split('@')[0];
+  document.getElementById('tb-avatar-t').textContent = me.email[0].toUpperCase();
+
+  // Determine taller role
+  if (myRole === 'master') {
+    myTallerRole = 'master';
+  } else if (myModulos === 'taller_jefe' || myModulos === 'ambos_jefe') {
+    myTallerRole = 'jefe';
+  } else {
+    myTallerRole = 'mecanico';
+  }
+
+  // Show/hide jefe-only tabs
+  const isJefe = myTallerRole !== 'mecanico';
+  document.querySelectorAll('.t-jefe-only').forEach(el => {
+    el.style.display = isJefe ? '' : 'none';
+  });
+
+  listenTallerData();
+  showTTab(isJefe ? 't-dashboard' : 't-registro');
+}
+
+function listenTallerData() {
+  tListeners.forEach(u => u());
+  tListeners = [];
+  tListeners.push(db.collection('t_vehiculos').onSnapshot(s => {
+    tVehiculos = s.docs.map(d=>({...d.data(),id:d.id})).sort((a,b)=>a.matricula.localeCompare(b.matricula));
+    refreshTaller();
+  }));
+  tListeners.push(db.collection('t_personal').onSnapshot(s => {
+    tPersonal = s.docs.map(d=>({...d.data(),id:d.id})).sort((a,b)=>a.nombre.localeCompare(b.nombre));
+    refreshTaller();
+  }));
+  tListeners.push(db.collection('t_registros').onSnapshot(s => {
+    tRegistros = s.docs.map(d=>({...d.data(),id:d.id})).sort((a,b)=>b.fecha.localeCompare(a.fecha));
+    refreshTaller();
+  }));
+  tListeners.push(db.collection('t_preventivos').onSnapshot(s => {
+    tPreventivos = s.docs.map(d=>({...d.data(),id:d.id}));
+    refreshTaller();
+    updateBellBadge();
+  }));
+  tListeners.push(db.collection('t_consumibles').onSnapshot(async s => {
+    tConsumibles = s.docs.map(d=>({...d.data(),id:d.id}));
+    if (tConsumibles.length === 0) await seedConsumibles();
+    else refreshTaller();
+  }));
+}
+
+async function seedConsumibles() {
+  const batch = db.batch();
+  CONS_DEFAULT.forEach(c => {
+    batch.set(db.collection('t_consumibles').doc(`c_${Date.now()}_${Math.random().toString(36).slice(2,5)}`), {...c, createdAt:Date.now()});
+  });
+  await batch.commit();
+}
+
+function refreshTaller() {
+  const tab = document.querySelector('#taller-nav .nav-item.active')?.dataset?.ttab || 't-dashboard';
+  if (tab==='t-dashboard')   renderTDash();
+  if (tab==='t-registro')    renderTRegistro();
+  if (tab==='t-historial')   renderHistorial();
+  if (tab==='t-flota')       renderFlota();
+  if (tab==='t-preventivo')  renderPreventivo();
+  if (tab==='t-personal')    renderPersonal();
+  if (tab==='t-consumibles') renderConsumibles();
+}
+
+window.showTTab = tab => {
+  document.querySelectorAll('#taller-nav .nav-item').forEach(n => n.classList.toggle('active', n.dataset.ttab===tab));
+  document.querySelectorAll('#screen-taller .panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('panel-'+tab)?.classList.add('active');
+  refreshTaller();
+};
+
+// ═══════════════════════════════════════════════
+//  HELPERS
+// ═══════════════════════════════════════════════
+function valorHora(persona) {
+  const sueldo = parseFloat(persona?.sueldo||0);
+  return sueldo / 30 / 8;
+}
+
+function fmtUYU(n) {
+  return '$ '+Number(n||0).toLocaleString('es-UY',{minimumFractionDigits:0,maximumFractionDigits:0});
+}
+
+function fmtFecha(f) {
+  if (!f) return '—';
+  const [y,m,d] = f.split('-');
+  return `${d}/${m}/${y}`;
+}
+
+function diasHasta(fecha) {
+  if (!fecha) return null;
+  const hoy = new Date(); hoy.setHours(0,0,0,0);
+  const target = new Date(fecha+'T00:00:00');
+  return Math.round((target-hoy)/(1000*60*60*24));
+}
+
+function statusPrev(p) {
+  // Check km
+  const veh = tVehiculos.find(v=>v.id===p.vehiculoId);
+  const kmAct = parseFloat(veh?.km||0);
+  const kmProx = parseFloat(p.ultimoKm||0) + parseFloat(p.kmIntervalo||0);
+  const kmAlerta = p.kmIntervalo>0 && kmAct >= kmProx - (p.kmIntervalo*0.1);
+  const kmVencido = p.kmIntervalo>0 && kmAct >= kmProx;
+  // Check fecha
+  const dias = p.proximaFecha ? diasHasta(p.proximaFecha) : null;
+  const fechaAlerta = dias !== null && dias <= 14;
+  const fechaVencida = dias !== null && dias <= 0;
+  if (kmVencido || fechaVencida) return 'vencido';
+  if (kmAlerta || fechaAlerta) return 'proximo';
+  return 'ok';
+}
+
+function updateBellBadge() {
+  const count = tPreventivos.filter(p=>['vencido','proximo'].includes(statusPrev(p))).length;
+  const badge = document.getElementById('bell-badge');
+  if (badge) { badge.textContent=count; badge.style.display=count>0?'flex':'none'; }
+}
+
+// ═══════════════════════════════════════════════
+//  DASHBOARD TALLER
+// ═══════════════════════════════════════════════
+function renderTDash() {
+  // Populate vehicle filter
+  const vfEl = document.getElementById('t-fil-vehiculo');
+  if (vfEl) {
+    const cur = vfEl.value;
+    vfEl.innerHTML = '<option value="">Todos los vehículos</option>'+
+      tVehiculos.map(v=>`<option value="${v.id}"${v.id===cur?' selected':''}>${v.matricula} — ${v.marca||''} ${v.modelo||''}</option>`).join('');
+  }
+
+  const filVeh   = document.getElementById('t-fil-vehiculo')?.value||'';
+  const filDesde = document.getElementById('t-fil-desde')?.value||'';
+  const filHasta = document.getElementById('t-fil-hasta')?.value||'';
+
+  let regs = [...tRegistros];
+  if (filVeh)   regs = regs.filter(r=>r.vehiculoId===filVeh);
+  if (filDesde) regs = regs.filter(r=>r.fecha>=filDesde);
+  if (filHasta) regs = regs.filter(r=>r.fecha<=filHasta);
+
+  const totalHoras    = regs.reduce((s,r)=>s+(parseFloat(r.horas)||0),0);
+  const totalCostoMO  = regs.reduce((s,r)=>s+(parseFloat(r.costoMO)||0),0);
+  const totalCostoCons= regs.reduce((s,r)=>s+(parseFloat(r.costoCons)||0),0);
+  const totalCosto    = totalCostoMO + totalCostoCons;
+  const vencidos      = tPreventivos.filter(p=>statusPrev(p)==='vencido').length;
+  const proximos      = tPreventivos.filter(p=>statusPrev(p)==='proximo').length;
+
+  document.getElementById('t-stats').innerHTML = `
+    <div class="stat"><div class="stat-val">${tVehiculos.length}</div><div class="stat-lbl">Vehículos</div></div>
+    <div class="stat"><div class="stat-val">${totalHoras.toFixed(1)}</div><div class="stat-lbl">Horas trabajadas</div></div>
+    <div class="stat"><div class="stat-val" style="font-size:16px">${fmtUYU(totalCosto)}</div><div class="stat-lbl">Costo total</div></div>
+    <div class="stat"><div class="stat-val" style="color:${vencidos>0?'var(--red)':'var(--g7)'}">${vencidos+proximos}</div><div class="stat-lbl">Alertas preventivo</div></div>`;
+
+  // Top: cost breakdown + vehicle summary
+  document.getElementById('t-dash-top').innerHTML = `
+    <div class="card">
+      <div class="card-head"><div class="card-title">💰 Costos del período</div></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;font-size:13px">
+        <div><div style="font-weight:700;font-size:16px;color:var(--g7)">${fmtUYU(totalCostoMO)}</div><div class="muted text-sm">Mano de obra</div></div>
+        <div><div style="font-weight:700;font-size:16px">${fmtUYU(totalCostoCons)}</div><div class="muted text-sm">Consumibles</div></div>
+        <div><div style="font-weight:700;font-size:16px;color:var(--blue)">${fmtUYU(totalCosto)}</div><div class="muted text-sm">Total</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-head"><div class="card-title">👤 Horas por mecánico</div></div>
+      ${tPersonal.map(p=>{
+        const hrs=regs.filter(r=>r.mecanicoId===p.id).reduce((s,r)=>s+(parseFloat(r.horas)||0),0);
+        const costo=hrs*valorHora(p);
+        return hrs>0?`<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px"><span>${p.nombre}</span><span><b>${hrs.toFixed(1)}h</b> · ${fmtUYU(costo)}</span></div>`:'';
+      }).join('')||'<p class="muted text-sm">Sin datos</p>'}
+    </div>`;
+
+  // Alertas preventivo
+  const alertas = tPreventivos.filter(p=>statusPrev(p)!=='ok');
+  document.getElementById('t-alertas-prev').innerHTML = alertas.length>0 ? `
+    <div style="font-size:13px;font-weight:700;margin-bottom:8px">🔔 Alertas de mantenimiento preventivo</div>
+    <div style="display:flex;flex-direction:column;gap:6px">
+      ${alertas.map(p=>{
+        const veh=tVehiculos.find(v=>v.id===p.vehiculoId);
+        const st=statusPrev(p);
+        const cls=st==='vencido'?'t-alerta-crit':'t-alerta-warn';
+        const icon=st==='vencido'?'🔴':'🟡';
+        return `<div class="${cls}">${icon} <b>${veh?.matricula||'—'}</b> — ${p.tarea} ${st==='vencido'?'(VENCIDO)':'(próximo)'}</div>`;
+      }).join('')}
+    </div>` : '';
+
+  // Cards por vehículo
+  document.getElementById('t-dash-cards').innerHTML = tVehiculos.map(v=>{
+    const vRegs = regs.filter(r=>r.vehiculoId===v.id);
+    const hrs   = vRegs.reduce((s,r)=>s+(parseFloat(r.horas)||0),0);
+    const costo = vRegs.reduce((s,r)=>s+(parseFloat(r.costoMO)||0)+(parseFloat(r.costoCons)||0),0);
+    const alertV= tPreventivos.filter(p=>p.vehiculoId===v.id&&statusPrev(p)!=='ok').length;
+    const stCls = v.estado==='operativo'?'t-status-op':v.estado==='taller'?'t-status-taller':'t-status-inact';
+    const stLbl = v.estado==='operativo'?'Operativo':v.estado==='taller'?'En taller':'Inactivo';
+    // Check doc vencimientos
+    const hoy=new Date().toISOString().split('T')[0];
+    const docAlerts=[];
+    if(v.revision&&v.revision<hoy) docAlerts.push('Revisión vencida');
+    if(v.seguro&&v.seguro<hoy) docAlerts.push('Seguro vencido');
+    if(v.habilitacion&&v.habilitacion<hoy) docAlerts.push('Habilitación vencida');
+    return `<div class="card">
+      <div class="card-head">
+        <div>
+          <div class="card-title">${v.matricula}</div>
+          <div class="muted text-sm">${v.marca||''} ${v.modelo||''} ${v.año?'('+v.año+')':''}</div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+          <span class="${stCls}">${stLbl}</span>
+          ${alertV>0?`<span class="chip chip-red">🔔 ${alertV}</span>`:''}
+        </div>
+      </div>
+      ${docAlerts.map(a=>`<div class="chip chip-red" style="margin-bottom:4px;display:block">⚠ ${a}</div>`).join('')}
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;font-size:12px">
+        <div><div style="font-weight:700">${hrs.toFixed(1)}h</div><div class="muted text-sm">Horas</div></div>
+        <div><div style="font-weight:700">${vRegs.length}</div><div class="muted text-sm">Trabajos</div></div>
+        <div><div style="font-weight:700;font-size:11px">${fmtUYU(costo)}</div><div class="muted text-sm">Costo</div></div>
+      </div>
+      <div class="muted text-sm" style="margin-top:6px">📍 ${(v.km||0).toLocaleString()} km actuales</div>
+    </div>`;
+  }).join('')||'<div class="card"><p class="muted">Sin vehículos. Agregá tu flota.</p></div>';
+}
+
+window.clearTFiltros = () => {
+  sv('t-fil-vehiculo',''); sv('t-fil-desde',''); sv('t-fil-hasta','');
+  renderTDash();
+};
+
+// ═══════════════════════════════════════════════
+//  REGISTRO DE TRABAJO
+// ═══════════════════════════════════════════════
+function renderTRegistro() {
+  // Populate mecánico select (if jefe/master, all; if mecánico, only self)
+  const mecSel = document.getElementById('reg-mecanico');
+  if (mecSel) {
+    if (myTallerRole === 'mecanico') {
+      // Find self in personal
+      const self = tPersonal.find(p=>p.email===me?.email);
+      mecSel.innerHTML = self ? `<option value="${self.id}">${self.nombre}</option>` :
+        `<option value="">— Registrá tu nombre en Personal primero —</option>`;
+      mecSel.disabled = true;
+    } else {
+      mecSel.disabled = false;
+      mecSel.innerHTML = tPersonal.map(p=>`<option value="${p.id}">${p.nombre}</option>`).join('') ||
+        '<option value="">Sin mecánicos registrados</option>';
+    }
+  }
+
+  // Populate vehiculo
+  const vehSel = document.getElementById('reg-vehiculo');
+  if (vehSel) {
+    vehSel.innerHTML = tVehiculos.map(v=>`<option value="${v.id}">${v.matricula} — ${v.marca||''} ${v.modelo||''}</option>`).join('') ||
+      '<option value="">Sin vehículos</option>';
+  }
+
+  // Populate consumibles select
+  const consSel = document.getElementById('reg-cons-sel');
+  if (consSel) {
+    consSel.innerHTML = '<option value="">+ Agregar consumible...</option>' +
+      tConsumibles.map(c=>`<option value="${c.id}">${c.nombre} (${c.unidad})</option>`).join('');
+  }
+
+  // Set today as default
+  if (!gv('reg-fecha')) sv('reg-fecha', new Date().toISOString().split('T')[0]);
+}
+
+window.addConsumible = sel => {
+  const id = sel.value; if (!id) return;
+  const c = tConsumibles.find(x=>x.id===id); if (!c) return;
+  if (regConsumiblesSeleccionados.find(x=>x.id===id)) { sel.value=''; return; }
+  regConsumiblesSeleccionados.push(c);
+  sel.value = '';
+  renderConsChips();
+  calcCostoReg();
+};
+
+function renderConsChips() {
+  document.getElementById('reg-consumibles-list').innerHTML =
+    regConsumiblesSeleccionados.map(c=>`
+      <span class="cons-chip">
+        ${c.nombre}
+        <button onclick="removeConsumible('${c.id}')">×</button>
+      </span>`).join('');
+}
+
+window.removeConsumible = id => {
+  regConsumiblesSeleccionados = regConsumiblesSeleccionados.filter(c=>c.id!==id);
+  renderConsChips();
+  calcCostoReg();
+};
+
+function calcCostoReg() {
+  const mecId = gv('reg-mecanico');
+  const horas = parseFloat(gv('reg-horas'))||0;
+  const mec = tPersonal.find(p=>p.id===mecId);
+  const vh = valorHora(mec);
+  const costoMO = vh * horas;
+  const costoCons = parseFloat(gv('reg-costo-cons'))||0;
+  const total = costoMO + costoCons;
+  const el = document.getElementById('reg-costo-resumen');
+  const det = document.getElementById('reg-costo-detalle');
+  if (horas>0 && mec) {
+    el.style.display='';
+    det.innerHTML=`
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:12px">
+        <div><div style="font-weight:700">${fmtUYU(costoMO)}</div><div class="muted">MO (${fmtUYU(vh)}/h × ${horas}h)</div></div>
+        <div><div style="font-weight:700">${fmtUYU(costoCons)}</div><div class="muted">Consumibles</div></div>
+        <div><div style="font-weight:700;color:var(--blue)">${fmtUYU(total)}</div><div class="muted">Total</div></div>
+      </div>`;
+  } else el.style.display='none';
+}
+
+// Wire live calculation
+document.addEventListener('DOMContentLoaded', () => {
+  ['reg-horas','reg-mecanico','reg-costo-cons'].forEach(id=>{
+    document.getElementById(id)?.addEventListener('input', calcCostoReg);
+    document.getElementById(id)?.addEventListener('change', calcCostoReg);
+  });
+});
+
+window.saveRegistro = async () => {
+  const mecId  = gv('reg-mecanico');
+  const vehId  = gv('reg-vehiculo');
+  const fecha  = gv('reg-fecha');
+  const horas  = parseFloat(gv('reg-horas'))||0;
+  const tareas = gv('reg-tareas').trim();
+  if (!mecId||!vehId||!fecha||!horas||!tareas) {
+    alert('Completá todos los campos obligatorios (*)'); return;
+  }
+  const mec = tPersonal.find(p=>p.id===mecId);
+  const vh  = valorHora(mec);
+  const costoMO   = vh * horas;
+  const costoCons = parseFloat(gv('reg-costo-cons'))||0;
+  const km = parseInt(gv('reg-km'))||null;
+
+  const id = `reg_${Date.now()}`;
+  await db.collection('t_registros').doc(id).set({
+    mecanicoId:mecId, mecanicoNombre:mec?.nombre||'—',
+    vehiculoId:vehId,
+    vehiculoMatricula:tVehiculos.find(v=>v.id===vehId)?.matricula||'—',
+    fecha, horas, tareas, obs:gv('reg-obs'),
+    consumibles:regConsumiblesSeleccionados.map(c=>c.nombre).join(', '),
+    costoCons, costoMO, total:costoMO+costoCons,
+    km, createdAt:Date.now(), creadoPor:me?.uid
+  });
+
+  // Update vehicle km
+  if (km) await db.collection('t_vehiculos').doc(vehId).update({km});
+
+  // Update preventivo lastKm/lastFecha if applicable
+  const prevs = tPreventivos.filter(p=>p.vehiculoId===vehId);
+  for (const p of prevs) {
+    if (tareas.toLowerCase().includes(p.tarea.toLowerCase().substring(0,8))) {
+      const nextKm   = km ? km + parseFloat(p.kmIntervalo||0) : null;
+      const nextDate = p.diasIntervalo>0 ? addDays(fecha, parseInt(p.diasIntervalo)) : null;
+      await db.collection('t_preventivos').doc(p.id).update({
+        ultimoKm:km||p.ultimoKm, ultimaFecha:fecha,
+        ...(nextKm&&{proximoKm:nextKm}),
+        ...(nextDate&&{proximaFecha:nextDate})
+      });
+    }
+  }
+
+  regConsumiblesSeleccionados=[];
+  renderConsChips();
+  clearRegistro();
+  alert('✅ Registro guardado correctamente.');
+};
+
+window.clearRegistro = () => {
+  ['reg-mecanico','reg-vehiculo','reg-tareas','reg-obs','reg-horas','reg-km','reg-costo-cons'].forEach(x=>{
+    const el=document.getElementById(x);if(el) el.value=el.tagName==='SELECT'?el.options[0]?.value||'':'';
+  });
+  sv('reg-fecha', new Date().toISOString().split('T')[0]);
+  regConsumiblesSeleccionados=[];
+  renderConsChips();
+  document.getElementById('reg-costo-resumen').style.display='none';
+};
+
+// ═══════════════════════════════════════════════
+//  HISTORIAL
+// ═══════════════════════════════════════════════
+function renderHistorial() {
+  // Populate filters
+  const hvEl=document.getElementById('hist-fil-veh');
+  const hmEl=document.getElementById('hist-fil-mec');
+  if(hvEl){const c=hvEl.value;hvEl.innerHTML='<option value="">Todos los vehículos</option>'+tVehiculos.map(v=>`<option value="${v.id}"${v.id===c?' selected':''}>${v.matricula}</option>`).join('');}
+  if(hmEl){const c=hmEl.value;hmEl.innerHTML='<option value="">Todos los mecánicos</option>'+tPersonal.map(p=>`<option value="${p.id}"${p.id===c?' selected':''}>${p.nombre}</option>`).join('');}
+
+  const fV=document.getElementById('hist-fil-veh')?.value||'';
+  const fM=document.getElementById('hist-fil-mec')?.value||'';
+  const fD=document.getElementById('hist-fil-desde')?.value||'';
+  const fH=document.getElementById('hist-fil-hasta')?.value||'';
+
+  let list=[...tRegistros];
+  if(fV) list=list.filter(r=>r.vehiculoId===fV);
+  if(fM) list=list.filter(r=>r.mecanicoId===fM);
+  if(fD) list=list.filter(r=>r.fecha>=fD);
+  if(fH) list=list.filter(r=>r.fecha<=fH);
+
+  const totalCosto=list.reduce((s,r)=>s+(parseFloat(r.total)||0),0);
+
+  document.getElementById('hist-tbody').innerHTML=list.map(r=>`<tr>
+    <td>${fmtFecha(r.fecha)}</td>
+    <td>${r.mecanicoNombre||'—'}</td>
+    <td class="mono">${r.vehiculoMatricula||'—'}</td>
+    <td class="hide-mobile" style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.tareas||'—'}</td>
+    <td class="hide-mobile" style="font-size:11px">${r.consumibles||'—'}</td>
+    <td>${r.horas||0}h</td>
+    <td>${r.km?r.km.toLocaleString()+'km':'—'}</td>
+    <td class="hide-mobile">${fmtUYU(r.costoMO)}</td>
+    <td class="hide-mobile">${fmtUYU(r.costoCons)}</td>
+    <td style="font-weight:700">${fmtUYU(r.total)}</td>
+    <td><div class="flex-gap">
+      <button class="btn btn-sm btn-secondary" onclick="verRegistro('${r.id}')">👁</button>
+      ${myTallerRole!=='mecanico'?`<button class="btn btn-sm btn-danger" onclick="delRegistro('${r.id}')">🗑</button>`:''}
+    </div></td>
+  </tr>`).join('')||`<tr><td colspan="11" style="text-align:center;padding:20px;color:var(--s5)">Sin registros.</td></tr>`;
+
+  document.getElementById('hist-total').textContent=`Total del período: ${fmtUYU(totalCosto)}`;
+}
+
+window.verRegistro = id => {
+  const r=tRegistros.find(x=>x.id===id); if(!r) return;
+  document.getElementById('reg-view-content').innerHTML=`
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:13px">
+      <div><div class="flabel">Fecha</div><div>${fmtFecha(r.fecha)}</div></div>
+      <div><div class="flabel">Mecánico</div><div>${r.mecanicoNombre}</div></div>
+      <div><div class="flabel">Vehículo</div><div class="mono">${r.vehiculoMatricula}</div></div>
+      <div><div class="flabel">Horas</div><div>${r.horas}h</div></div>
+      <div style="grid-column:1/-1"><div class="flabel">Tareas realizadas</div><div style="white-space:pre-wrap">${r.tareas}</div></div>
+      <div style="grid-column:1/-1"><div class="flabel">Consumibles</div><div>${r.consumibles||'—'}</div></div>
+      ${r.obs?`<div style="grid-column:1/-1"><div class="flabel">Observaciones</div><div>${r.obs}</div></div>`:''}
+      <div><div class="flabel">Km registrados</div><div>${r.km?r.km.toLocaleString()+'km':'—'}</div></div>
+      <div><div class="flabel" style="margin-bottom:6px">Costos</div>
+        <div style="font-size:12px">MO: ${fmtUYU(r.costoMO)}<br>Consumibles: ${fmtUYU(r.costoCons)}<br><b>Total: ${fmtUYU(r.total)}</b></div>
+      </div>
+    </div>`;
+  document.getElementById('reg-view-del').onclick=()=>{closeModal('modal-reg-view');delRegistro(id);};
+  openModal('modal-reg-view');
+};
+
+window.delRegistro = async id => {
+  if(!confirm('¿Eliminar este registro?')) return;
+  await db.collection('t_registros').doc(id).delete();
+};
+
+// ═══════════════════════════════════════════════
+//  FLOTA
+// ═══════════════════════════════════════════════
+function renderFlota() {
+  const hoy=new Date().toISOString().split('T')[0];
+  document.getElementById('flota-grid').innerHTML=tVehiculos.map(v=>{
+    const stCls=v.estado==='operativo'?'t-status-op':v.estado==='taller'?'t-status-taller':'t-status-inact';
+    const stLbl=v.estado==='operativo'?'✅ Operativo':v.estado==='taller'?'🔧 En taller':'❌ Inactivo';
+    const docAlerts=[];
+    if(v.revision){const d=diasHasta(v.revision);if(d!==null&&d<=30) docAlerts.push(`Revisión: ${d<=0?'VENCIDA':'vence en '+d+'d'}`);}
+    if(v.seguro){const d=diasHasta(v.seguro);if(d!==null&&d<=30) docAlerts.push(`Seguro: ${d<=0?'VENCIDO':'vence en '+d+'d'}`);}
+    if(v.habilitacion){const d=diasHasta(v.habilitacion);if(d!==null&&d<=30) docAlerts.push(`Habilitación: ${d<=0?'VENCIDA':'vence en '+d+'d'}`);}
+    const prevA=tPreventivos.filter(p=>p.vehiculoId===v.id&&statusPrev(p)!=='ok').length;
+    return `<div class="card">
+      <div class="card-head">
+        <div>
+          <div class="card-title mono">${v.matricula}</div>
+          <div class="muted text-sm">${v.tipo||'—'} · ${v.marca||''} ${v.modelo||''} ${v.año?'('+v.año+')':''}</div>
+        </div>
+        <div class="flex-gap">
+          <button class="btn btn-sm btn-secondary" onclick="openVehModal('${v.id}')">✏</button>
+          <button class="btn btn-sm btn-danger" onclick="delVeh('${v.id}')">🗑</button>
+        </div>
+      </div>
+      <div style="margin-bottom:8px"><span class="${stCls}">${stLbl}</span></div>
+      ${docAlerts.map(a=>`<div class="chip chip-${a.includes('VENC')?'red':'amber'}" style="margin-bottom:4px;display:block">⚠ ${a}</div>`).join('')}
+      ${prevA>0?`<div class="chip chip-red" style="margin-bottom:6px">🔔 ${prevA} mantenimiento(s) pendiente(s)</div>`:''}
+      <div style="font-size:12px;color:var(--s7)">
+        📍 <b>${(v.km||0).toLocaleString()}</b> km<br>
+        ${v.revision?`📋 Revisión: ${fmtFecha(v.revision)}<br>`:''}
+        ${v.seguro?`🛡 Seguro: ${fmtFecha(v.seguro)}<br>`:''}
+        ${v.habilitacion?`📄 Habilitación: ${fmtFecha(v.habilitacion)}`:''}
+      </div>
+    </div>`;
+  }).join('')||'<div class="card"><p class="muted">Sin vehículos registrados. Agregá tu flota.</p></div>';
+}
+
+window.openVehModal=(id=null)=>{
+  document.getElementById('modal-veh-title').textContent=id?'Editar Vehículo':'Nuevo Vehículo';
+  sv('veh-id',id||'');
+  if(id){const v=tVehiculos.find(x=>x.id===id);if(!v)return;
+    sv('veh-matricula',v.matricula);sv('veh-tipo',v.tipo||'Camión Prensa');
+    sv('veh-marca',v.marca||'');sv('veh-modelo',v.modelo||'');sv('veh-año',v.año||'');
+    sv('veh-km',v.km||0);sv('veh-estado',v.estado||'operativo');
+    sv('veh-revision',v.revision||'');sv('veh-seguro',v.seguro||'');sv('veh-habilitacion',v.habilitacion||'');
+  } else {
+    ['veh-matricula','veh-marca','veh-modelo','veh-año','veh-revision','veh-seguro','veh-habilitacion'].forEach(x=>sv(x,''));
+    sv('veh-km',0);sv('veh-tipo','Camión Prensa');sv('veh-estado','operativo');
+  }
+  openModal('modal-veh');
+};
+
+window.saveVeh=async()=>{
+  const matricula=gv('veh-matricula').trim().toUpperCase();
+  if(!matricula){alert('La matrícula es obligatoria.');return;}
+  const editId=gv('veh-id');
+  const id=editId||`v_${Date.now()}`;
+  await db.collection('t_vehiculos').doc(id).set({
+    matricula,tipo:gv('veh-tipo'),marca:gv('veh-marca'),modelo:gv('veh-modelo'),
+    año:parseInt(gv('veh-año'))||null,km:parseInt(gv('veh-km'))||0,
+    estado:gv('veh-estado'),revision:gv('veh-revision')||null,
+    seguro:gv('veh-seguro')||null,habilitacion:gv('veh-habilitacion')||null
+  });
+  closeModal('modal-veh');
+};
+
+window.delVeh=async id=>{
+  if(!confirm('¿Eliminar este vehículo? Se perderán sus registros asociados.'))return;
+  await db.collection('t_vehiculos').doc(id).delete();
+};
+
+// ═══════════════════════════════════════════════
+//  PREVENTIVO
+// ═══════════════════════════════════════════════
+function renderPreventivo() {
+  document.getElementById('prev-tbody').innerHTML=tPreventivos.map(p=>{
+    const veh=tVehiculos.find(v=>v.id===p.vehiculoId);
+    const st=statusPrev(p);
+    const stLbl=st==='vencido'?'🔴 VENCIDO':st==='proximo'?'🟡 Próximo':'🟢 OK';
+    const kmAct=parseFloat(veh?.km||0);
+    const kmProx=p.kmIntervalo>0?(parseFloat(p.ultimoKm||0)+parseFloat(p.kmIntervalo||0)):null;
+    return `<tr>
+      <td class="mono">${veh?.matricula||'—'}</td>
+      <td>${p.tarea}</td>
+      <td>${p.kmIntervalo>0?p.kmIntervalo.toLocaleString()+'km':'—'}</td>
+      <td>${p.diasIntervalo>0?p.diasIntervalo+'d':'—'}</td>
+      <td>${p.ultimoKm?(parseInt(p.ultimoKm).toLocaleString()+'km'):'—'}</td>
+      <td>${fmtFecha(p.ultimaFecha)}</td>
+      <td>${kmProx?(kmProx.toLocaleString()+'km'):'—'}</td>
+      <td>${fmtFecha(p.proximaFecha)}</td>
+      <td style="font-weight:700">${stLbl}</td>
+      <td><div class="flex-gap">
+        <button class="btn btn-sm btn-secondary" onclick="openPrevModal('${p.id}')">✏</button>
+        <button class="btn btn-sm btn-primary btn-sm" onclick="marcarPrevHecho('${p.id}')">✔ Hecho</button>
+        <button class="btn btn-sm btn-danger" onclick="delPrev('${p.id}')">🗑</button>
+      </div></td>
+    </tr>`;
+  }).join('')||`<tr><td colspan="10" style="text-align:center;padding:20px;color:var(--s5)">Sin tareas preventivas. Agregá la primera.</td></tr>`;
+}
+
+window.openPrevModal=(id=null)=>{
+  document.getElementById('modal-prev-title').textContent=id?'Editar Preventivo':'Nueva Tarea Preventiva';
+  sv('prev-id',id||'');
+  document.getElementById('prev-veh').innerHTML=tVehiculos.map(v=>`<option value="${v.id}">${v.matricula} — ${v.marca||''}</option>`).join('');
+  if(id){const p=tPreventivos.find(x=>x.id===id);if(!p)return;
+    sv('prev-veh',p.vehiculoId);sv('prev-tarea',p.tarea);
+    sv('prev-km-intervalo',p.kmIntervalo||0);sv('prev-dias-intervalo',p.diasIntervalo||0);
+    sv('prev-ultimo-km',p.ultimoKm||'');sv('prev-ultima-fecha',p.ultimaFecha||'');
+    sv('prev-notas',p.notas||'');
+  } else {
+    ['prev-tarea','prev-notas','prev-ultimo-km','prev-ultima-fecha'].forEach(x=>sv(x,''));
+    sv('prev-km-intervalo',0);sv('prev-dias-intervalo',0);
+  }
+  openModal('modal-prev');
+};
+
+window.savePrev=async()=>{
+  const vehId=gv('prev-veh'),tarea=gv('prev-tarea').trim();
+  if(!vehId||!tarea){alert('Vehículo y tarea son obligatorios.');return;}
+  const editId=gv('prev-id'),id=editId||`prev_${Date.now()}`;
+  const kmInt=parseFloat(gv('prev-km-intervalo'))||0;
+  const diasInt=parseFloat(gv('prev-dias-intervalo'))||0;
+  const ulKm=parseFloat(gv('prev-ultimo-km'))||0;
+  const ulFecha=gv('prev-ultima-fecha')||null;
+  const proxKm=kmInt>0?ulKm+kmInt:null;
+  const proxFecha=diasInt>0&&ulFecha?addDays(ulFecha,diasInt):null;
+  await db.collection('t_preventivos').doc(id).set({
+    vehiculoId:vehId,tarea,kmIntervalo:kmInt,diasIntervalo:diasInt,
+    ultimoKm:ulKm,ultimaFecha:ulFecha,
+    proximoKm:proxKm,proximaFecha:proxFecha,
+    notas:gv('prev-notas')
+  });
+  closeModal('modal-prev');
+};
+
+window.marcarPrevHecho=async id=>{
+  const p=tPreventivos.find(x=>x.id===id);if(!p) return;
+  const veh=tVehiculos.find(v=>v.id===p.vehiculoId);
+  const hoy=new Date().toISOString().split('T')[0];
+  const kmAct=parseFloat(veh?.km||p.ultimoKm||0);
+  const proxKm=p.kmIntervalo>0?kmAct+parseFloat(p.kmIntervalo):null;
+  const proxFecha=p.diasIntervalo>0?addDays(hoy,parseInt(p.diasIntervalo)):null;
+  await db.collection('t_preventivos').doc(id).update({
+    ultimoKm:kmAct,ultimaFecha:hoy,
+    ...(proxKm&&{proximoKm:proxKm}),
+    ...(proxFecha&&{proximaFecha:proxFecha})
+  });
+  alert('✅ Mantenimiento marcado como realizado hoy.');
+};
+
+window.delPrev=async id=>{
+  if(!confirm('¿Eliminar esta tarea preventiva?'))return;
+  await db.collection('t_preventivos').doc(id).delete();
+};
+
+function addDays(dateStr,days){
+  const d=new Date(dateStr+'T00:00:00');
+  d.setDate(d.getDate()+days);
+  return d.toISOString().split('T')[0];
+}
+
+// ═══════════════════════════════════════════════
+//  PERSONAL
+// ═══════════════════════════════════════════════
+function renderPersonal() {
+  document.getElementById('personal-tbody').innerHTML=tPersonal.map(p=>{
+    const vh=valorHora(p);
+    return `<tr>
+      <td><b>${p.nombre}</b></td>
+      <td><span class="chip ${p.rol==='jefe'?'chip-green':'chip-blue'}">${p.rol==='jefe'?'Jefe Taller':'Mecánico'}</span></td>
+      <td>${fmtUYU(p.sueldo)}/mes</td>
+      <td>${fmtUYU(vh)}/hora</td>
+      <td class="mono text-sm">${p.email||'—'}</td>
+      <td><div class="flex-gap">
+        <button class="btn btn-sm btn-secondary" onclick="openPersonalModal('${p.id}')">✏</button>
+        <button class="btn btn-sm btn-danger" onclick="delPersonal('${p.id}')">🗑</button>
+      </div></td>
+    </tr>`;
+  }).join('')||`<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--s5)">Sin mecánicos registrados.</td></tr>`;
+}
+
+window.openPersonalModal=(id=null)=>{
+  document.getElementById('modal-personal-title').textContent=id?'Editar Mecánico':'Nuevo Mecánico';
+  sv('pers-id',id||'');
+  if(id){const p=tPersonal.find(x=>x.id===id);if(!p)return;
+    sv('pers-nombre',p.nombre);sv('pers-rol',p.rol||'mecanico');
+    sv('pers-sueldo',p.sueldo||0);sv('pers-email',p.email||'');
+    calcValorHora();
+  } else {
+    ['pers-nombre','pers-email'].forEach(x=>sv(x,''));
+    sv('pers-rol','mecanico');sv('pers-sueldo',0);
+    document.getElementById('pers-vh-preview').textContent='Valor hora: —';
+  }
+  openModal('modal-personal');
+};
+
+window.calcValorHora=()=>{
+  const s=parseFloat(gv('pers-sueldo'))||0;
+  const vh=s/30/8;
+  document.getElementById('pers-vh-preview').textContent=s>0?`Valor hora: ${fmtUYU(vh)}/h`:'Valor hora: —';
+};
+
+window.savePersonal=async()=>{
+  const nombre=gv('pers-nombre').trim();
+  if(!nombre){alert('El nombre es obligatorio.');return;}
+  const editId=gv('pers-id'),id=editId||`p_${Date.now()}`;
+  await db.collection('t_personal').doc(id).set({
+    nombre,rol:gv('pers-rol'),
+    sueldo:parseFloat(gv('pers-sueldo'))||0,
+    email:gv('pers-email').trim()
+  });
+  closeModal('modal-personal');
+};
+
+window.delPersonal=async id=>{
+  if(!confirm('¿Eliminar este mecánico?'))return;
+  await db.collection('t_personal').doc(id).delete();
+};
+
+// ═══════════════════════════════════════════════
+//  CONSUMIBLES
+// ═══════════════════════════════════════════════
+function renderConsumibles() {
+  document.getElementById('cons-grid').innerHTML=tConsumibles.map(c=>`<div class="card">
+    <div class="card-head">
+      <div>
+        <div class="card-title">${c.nombre}</div>
+        <div class="muted text-sm">${c.cat||'—'} · ${c.unidad||'—'}</div>
+      </div>
+      <div class="flex-gap">
+        <button class="btn btn-sm btn-secondary" onclick="openConsModal('${c.id}')">✏</button>
+        <button class="btn btn-sm btn-danger" onclick="delCons('${c.id}')">🗑</button>
+      </div>
+    </div>
+    <div style="font-size:13px;color:var(--g7);font-weight:700">${fmtUYU(c.precio)} / ${c.unidad}</div>
+  </div>`).join('')||'<div class="card"><p class="muted">Sin consumibles.</p></div>';
+}
+
+window.openConsModal=(id=null)=>{
+  document.getElementById('modal-cons-title').textContent=id?'Editar Consumible':'Nuevo Consumible';
+  sv('cons-id',id||'');
+  if(id){const c=tConsumibles.find(x=>x.id===id);if(!c)return;
+    sv('cons-nombre',c.nombre);sv('cons-cat',c.cat||'Lubricantes');
+    sv('cons-unidad',c.unidad||'unidad');sv('cons-precio',c.precio||0);
+  } else {
+    ['cons-nombre'].forEach(x=>sv(x,''));
+    sv('cons-cat','Lubricantes');sv('cons-unidad','unidad');sv('cons-precio',0);
+  }
+  openModal('modal-cons');
+};
+
+window.saveCons=async()=>{
+  const nombre=gv('cons-nombre').trim();if(!nombre){alert('El nombre es obligatorio.');return;}
+  const editId=gv('cons-id'),id=editId||`c_${Date.now()}`;
+  await db.collection('t_consumibles').doc(id).set({
+    nombre,cat:gv('cons-cat'),unidad:gv('cons-unidad'),precio:parseFloat(gv('cons-precio'))||0
+  });
+  closeModal('modal-cons');
+};
+
+window.delCons=async id=>{
+  if(!confirm('¿Eliminar este consumible?'))return;
+  await db.collection('t_consumibles').doc(id).delete();
+};
+
+// ═══════════════════════════════════════════════
+//  SHARED UTILS
+// ═══════════════════════════════════════════════
 function cap1(s){return s?s.charAt(0).toUpperCase()+s.slice(1).toLowerCase():s;}
 function gv(id){return document.getElementById(id)?.value||'';}
 function sv(id,val){const el=document.getElementById(id);if(el)el.value=val;}
-function show(id){const el=document.getElementById(id);if(el){el.style.display='flex';}}
+function show(id){const el=document.getElementById(id);if(el)el.style.display='flex';}
 function hide(id){const el=document.getElementById(id);if(el)el.style.display='none';}
 function openModal(id){document.getElementById(id)?.classList.add('open');}
 function closeModal(id){document.getElementById(id)?.classList.remove('open');}
