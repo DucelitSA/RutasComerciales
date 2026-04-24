@@ -268,7 +268,7 @@ tr:hover td{background:var(--s0);}
 </div>
 
 <!-- ═══ PORTAL SELECTOR ═══ -->
-<div id="screen-portal" style="display:none">
+<div id="screen-portal" style="display:none;position:fixed;inset:0;overflow-y:auto;background:linear-gradient(135deg,#1a3a1a,#2d6a2d);flex-direction:column;align-items:center;justify-content:center;padding:40px 20px;gap:32px;z-index:100;">
   <div class="portal-header">
     <img src="https://www.aborgama.com/logo_aborgama.png" alt="Aborgama" onerror="this.style.display='none'">
     <h1>Bienvenido, <span id="portal-name">—</span></h1>
@@ -828,7 +828,14 @@ auth.onAuthStateChanged(async user => {
     const snap = await db.collection('usuarios').doc(user.uid).get();
     if (snap.exists) {
       myRole    = snap.data().rol || 'operador';
-      myModulos = snap.data().modulos || 'rutas';
+      myModulos = snap.data().modulos || 'ambos';
+    } else {
+      // No doc in Firestore yet — create it as master if first user
+      myRole    = 'master';
+      myModulos = 'ambos';
+      await db.collection('usuarios').doc(user.uid).set({
+        email: user.email, rol: 'master', modulos: 'ambos', createdAt: Date.now()
+      });
     }
     showPortalScreen();
   } else {
@@ -864,20 +871,32 @@ document.addEventListener('DOMContentLoaded', () => {
 //  PORTAL
 // ═══════════════════════════════════════════════
 function showPortalScreen() {
+  // Hide all module screens
+  hide('screen-rutas');
+  const st = document.getElementById('screen-taller');
+  if (st) st.style.display = 'none';
+  // Show portal
   show('screen-portal');
   document.getElementById('portal-name').textContent = me.email.split('@')[0];
-  // Access logic:
-  // master → everything
-  // modulos: 'rutas' | 'taller' | 'ambos' | 'rutas_jefe' | 'taller_jefe' | 'ambos_jefe'
-  const hasRutas  = myRole==='master' || ['rutas','ambos','rutas_jefe','ambos_jefe'].includes(myModulos);
-  const hasTaller = myRole==='master' || ['taller','ambos','taller_jefe','ambos_jefe'].includes(myModulos);
+  // master always gets everything regardless of modulos field
+  const isMaster = myRole === 'master';
+  const hasRutas  = isMaster || ['rutas','ambos','rutas_jefe','ambos_jefe'].includes(myModulos);
+  const hasTaller = isMaster || ['taller','ambos','taller_jefe','ambos_jefe'].includes(myModulos);
   document.getElementById('portal-rutas').classList.toggle('disabled', !hasRutas);
   document.getElementById('portal-taller').classList.toggle('disabled', !hasTaller);
+  // Make sure onclick works even if disabled class is wrongly set for master
+  if (isMaster) {
+    document.getElementById('portal-rutas').classList.remove('disabled');
+    document.getElementById('portal-taller').classList.remove('disabled');
+  }
 }
 
 window.showPortal = () => {
   hide('screen-rutas');
+  const st = document.getElementById('screen-taller');
+  if (st) st.style.display = 'none';
   show('screen-portal');
+  showPortalScreen();
 };
 
 window.enterModule = mod => {
