@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>Aborgama — Portal</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌿</text></svg>">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <style>
@@ -723,15 +724,18 @@ tr:hover td{background:var(--s0);}
       <div class="fg"><label class="flabel">Rol</label>
         <select class="fselect" id="usr-rol">
           <option value="operador">Operador</option>
-          <option value="master">Master (admin)</option>
+          <option value="master">Master (admin total)</option>
         </select>
       </div>
       <div class="fg"><label class="flabel">Acceso a módulos</label>
         <select class="fselect" id="usr-modulos">
-          <option value="rutas">Solo Rutas</option>
-          <option value="taller">Solo Taller</option>
-          <option value="ambos">Rutas y Taller</option>
+          <option value="rutas">🚛 Solo Rutas (operador)</option>
+          <option value="taller">🔧 Solo Taller (mecánico)</option>
+          <option value="taller_jefe">🔧 Solo Taller (jefe de taller)</option>
+          <option value="ambos">🚛🔧 Rutas + Taller (operador)</option>
+          <option value="ambos_jefe">🚛🔧 Rutas + Taller (jefe de taller)</option>
         </select>
+        <span class="fhint">Jefe de taller puede ver dashboard, historial, flota y personal</span>
       </div>
     </div>
     <div class="modal-actions">
@@ -826,13 +830,9 @@ auth.onAuthStateChanged(async user => {
       myRole    = snap.data().rol || 'operador';
       myModulos = snap.data().modulos || 'rutas';
     }
-    hide('screen-login');
     showPortalScreen();
   } else {
     me = null;
-    hide('screen-portal');
-    hide('screen-rutas');
-    hide('screen-taller');
     show('screen-login');
   }
 });
@@ -864,24 +864,20 @@ document.addEventListener('DOMContentLoaded', () => {
 //  PORTAL
 // ═══════════════════════════════════════════════
 function showPortalScreen() {
-  hide('screen-login');
-  hide('screen-rutas');
-  hide('screen-taller');
   show('screen-portal');
-  window.scrollTo(0,0);
   document.getElementById('portal-name').textContent = me.email.split('@')[0];
-  // Show/hide modules based on permissions
-  const hasRutas  = ['rutas','ambos','master'].includes(myModulos) || myRole==='master';
-  const hasTaller = ['taller','taller_jefe','ambos','ambos_jefe','master'].includes(myModulos) || myRole==='master';
+  // Access logic:
+  // master → everything
+  // modulos: 'rutas' | 'taller' | 'ambos' | 'rutas_jefe' | 'taller_jefe' | 'ambos_jefe'
+  const hasRutas  = myRole==='master' || ['rutas','ambos','rutas_jefe','ambos_jefe'].includes(myModulos);
+  const hasTaller = myRole==='master' || ['taller','ambos','taller_jefe','ambos_jefe'].includes(myModulos);
   document.getElementById('portal-rutas').classList.toggle('disabled', !hasRutas);
   document.getElementById('portal-taller').classList.toggle('disabled', !hasTaller);
 }
 
 window.showPortal = () => {
   hide('screen-rutas');
-  hide('screen-taller');
   show('screen-portal');
-  window.scrollTo(0,0);
 };
 
 window.enterModule = mod => {
@@ -1831,11 +1827,16 @@ window.exportPrint=()=>{
 async function renderUsuarios(){
   const snap=await db.collection('usuarios').get();
   const usrs=snap.docs.map(d=>({id:d.id,...d.data()}));
+  const modLabel = {
+    'rutas':'🚛 Solo Rutas','taller':'🔧 Solo Taller (mecánico)',
+    'taller_jefe':'🔧 Taller (jefe)','ambos':'🚛🔧 Rutas + Taller',
+    'ambos_jefe':'🚛🔧 Rutas + Taller (jefe)',
+  };
   document.getElementById('usr-tbody').innerHTML=usrs.map(u=>{
     const isSelf=u.id===me?.uid;
     return`<tr><td><b>${u.email||u.id}</b>${isSelf?' <span class="chip chip-green" style="font-size:9px">vos</span>':''}</td>
     <td><span class="chip ${u.rol==='master'?'chip-green':'chip-blue'}">${u.rol==='master'?'Master':'Operador'}</span></td>
-    <td>${u.modulos||'rutas'}</td>
+    <td style="font-size:12px">${modLabel[u.modulos]||u.modulos||'rutas'}</td>
     <td><div class="flex-gap">
       <button class="btn btn-sm btn-secondary" onclick="openCambiarClave()">🔑</button>
       ${!isSelf?`<button class="btn btn-sm btn-danger" onclick="delUsr('${u.id}')">🗑</button>`:''}
@@ -1873,7 +1874,6 @@ function parseCSV(text){
     const o={};hdrs.forEach((h,i)=>{o[h]=(vals[i]||'').replace(/^"|"$/g,'').trim();});return o;
   }).filter(r=>r.nombre||r.cliente);
 }
-</script>
 
 <!-- ═══ MÓDULO TALLER ═══ -->
 <div id="screen-taller" style="display:none;flex-direction:column;height:100vh;">
@@ -2230,7 +2230,7 @@ function enterTaller() {
   // Determine taller role
   if (myRole === 'master') {
     myTallerRole = 'master';
-  } else if (myModulos === 'taller_jefe' || myModulos === 'ambos_jefe') {
+  } else if (['taller_jefe','ambos_jefe'].includes(myModulos)) {
     myTallerRole = 'jefe';
   } else {
     myTallerRole = 'mecanico';
