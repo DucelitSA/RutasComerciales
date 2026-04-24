@@ -21,7 +21,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--s1);color:var(--s9);min-h
 img{max-width:100%;}
 
 /* ═══ LOGIN ═══ */
-#screen-login{min-height:100vh;background:linear-gradient(135deg,var(--g9),var(--g7));display:flex;align-items:center;justify-content:center;padding:20px;}
+#screen-login{position:fixed;inset:0;z-index:9999;background:linear-gradient(135deg,var(--g9),var(--g7));display:flex;align-items:center;justify-content:center;padding:20px;}
 .login-box{background:var(--w);border-radius:20px;padding:40px 36px;width:100%;max-width:380px;box-shadow:var(--sh3);text-align:center;}
 .login-logo{height:48px;margin-bottom:20px;}
 .login-title{font-size:22px;font-weight:700;color:var(--g8);margin-bottom:4px;}
@@ -251,7 +251,7 @@ tr:hover td{background:var(--s0);}
 <body>
 
 <!-- ═══ LOGIN ═══ -->
-<div id="screen-login">
+<div id="screen-login" style="position:fixed;inset:0;z-index:9999;background:linear-gradient(135deg,#1a3a1a,#2d6a2d);display:flex;align-items:center;justify-content:center;padding:20px;">
   <div class="login-box">
     <img class="login-logo" src="https://www.aborgama.com/logo_aborgama.png" alt="Aborgama" onerror="this.style.display='none'">
     <div class="login-title">Portal Aborgama</div>
@@ -871,20 +871,19 @@ document.addEventListener('DOMContentLoaded', () => {
 //  PORTAL
 // ═══════════════════════════════════════════════
 function showPortalScreen() {
-  // Hide all module screens
+  // Hide everything first
   hide('screen-rutas');
+  hide('screen-login');
   const st = document.getElementById('screen-taller');
   if (st) st.style.display = 'none';
   // Show portal
   show('screen-portal');
   document.getElementById('portal-name').textContent = me.email.split('@')[0];
-  // master always gets everything regardless of modulos field
   const isMaster = myRole === 'master';
   const hasRutas  = isMaster || ['rutas','ambos','rutas_jefe','ambos_jefe'].includes(myModulos);
   const hasTaller = isMaster || ['taller','ambos','taller_jefe','ambos_jefe'].includes(myModulos);
   document.getElementById('portal-rutas').classList.toggle('disabled', !hasRutas);
   document.getElementById('portal-taller').classList.toggle('disabled', !hasTaller);
-  // Make sure onclick works even if disabled class is wrongly set for master
   if (isMaster) {
     document.getElementById('portal-rutas').classList.remove('disabled');
     document.getElementById('portal-taller').classList.remove('disabled');
@@ -893,6 +892,7 @@ function showPortalScreen() {
 
 window.showPortal = () => {
   hide('screen-rutas');
+  hide('screen-login');
   const st = document.getElementById('screen-taller');
   if (st) st.style.display = 'none';
   show('screen-portal');
