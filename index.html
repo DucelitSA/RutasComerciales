@@ -1984,7 +1984,8 @@ function parseCSV(text){
             </div>
             <div class="fg">
               <label class="flabel">Costo consumibles (UYU)</label>
-              <input class="finput" id="reg-costo-cons" type="number" min="0" placeholder="0">
+              <input class="finput" id="reg-costo-cons" type="number" min="0" placeholder="Automático" readonly style="background:var(--s1);color:var(--s5);">
+              <span class="fhint">Se calcula automático: cantidad × precio unitario</span>
             </div>
             <div class="fg form-full">
               <label class="flabel">Observaciones</label>
@@ -2523,7 +2524,10 @@ window.addConsumible = sel => {
   const id = sel.value; if (!id) return;
   const c = tConsumibles.find(x=>x.id===id); if (!c) return;
   if (regConsumiblesSeleccionados.find(x=>x.id===id)) { sel.value=''; return; }
-  regConsumiblesSeleccionados.push(c);
+  // Ask quantity
+  const qty = parseFloat(prompt(`¿Cuántos/as ${c.unidad}(s) de "${c.nombre}"?`, '1'));
+  if (!qty || qty <= 0) { sel.value=''; return; }
+  regConsumiblesSeleccionados.push({...c, cantidad: qty});
   sel.value = '';
   renderConsChips();
   calcCostoReg();
@@ -2533,7 +2537,7 @@ function renderConsChips() {
   document.getElementById('reg-consumibles-list').innerHTML =
     regConsumiblesSeleccionados.map(c=>`
       <span class="cons-chip">
-        ${c.nombre}
+        ${c.cantidad} ${c.unidad} × ${c.nombre}
         <button onclick="removeConsumible('${c.id}')">×</button>
       </span>`).join('');
 }
@@ -2550,7 +2554,11 @@ function calcCostoReg() {
   const mec = tPersonal.find(p=>p.id===mecId);
   const vh = valorHora(mec);
   const costoMO = vh * horas;
-  const costoCons = parseFloat(gv('reg-costo-cons'))||0;
+  // Auto-calculate from quantity × unit price
+  const costoCons = regConsumiblesSeleccionados.reduce((s,c)=>s+(parseFloat(c.precio)||0)*(parseFloat(c.cantidad)||1), 0);
+  // Update readonly field
+  const cosConsEl = document.getElementById('reg-costo-cons');
+  if (cosConsEl) { cosConsEl.value = costoCons.toFixed(0); cosConsEl.readOnly = true; }
   const total = costoMO + costoCons;
   const el = document.getElementById('reg-costo-resumen');
   const det = document.getElementById('reg-costo-detalle');
@@ -2559,7 +2567,7 @@ function calcCostoReg() {
     det.innerHTML=`
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:12px">
         <div><div style="font-weight:700">${fmtUYU(costoMO)}</div><div class="muted">MO (${fmtUYU(vh)}/h × ${horas}h)</div></div>
-        <div><div style="font-weight:700">${fmtUYU(costoCons)}</div><div class="muted">Consumibles</div></div>
+        <div><div style="font-weight:700">${fmtUYU(costoCons)}</div><div class="muted">Consumibles (${regConsumiblesSeleccionados.length} ítem/s)</div></div>
         <div><div style="font-weight:700;color:var(--blue)">${fmtUYU(total)}</div><div class="muted">Total</div></div>
       </div>`;
   } else el.style.display='none';
@@ -2567,7 +2575,7 @@ function calcCostoReg() {
 
 // Wire live calculation
 document.addEventListener('DOMContentLoaded', () => {
-  ['reg-horas','reg-mecanico','reg-costo-cons'].forEach(id=>{
+  ['reg-horas','reg-mecanico'].forEach(id=>{
     document.getElementById(id)?.addEventListener('input', calcCostoReg);
     document.getElementById(id)?.addEventListener('change', calcCostoReg);
   });
@@ -2585,8 +2593,9 @@ window.saveRegistro = async () => {
   const mec = tPersonal.find(p=>p.id===mecId);
   const vh  = valorHora(mec);
   const costoMO   = vh * horas;
-  const costoCons = parseFloat(gv('reg-costo-cons'))||0;
+  const costoCons = regConsumiblesSeleccionados.reduce((s,c)=>s+(parseFloat(c.precio)||0)*(parseFloat(c.cantidad)||1), 0);
   const km = parseInt(gv('reg-km'))||null;
+  const consDetalle = regConsumiblesSeleccionados.map(c=>`${c.cantidad} ${c.unidad} × ${c.nombre}`).join(', ');
 
   const id = `reg_${Date.now()}`;
   await db.collection('t_registros').doc(id).set({
@@ -2594,7 +2603,7 @@ window.saveRegistro = async () => {
     vehiculoId:vehId,
     vehiculoMatricula:tVehiculos.find(v=>v.id===vehId)?.matricula||'—',
     fecha, horas, tareas, obs:gv('reg-obs'),
-    consumibles:regConsumiblesSeleccionados.map(c=>c.nombre).join(', '),
+    consumibles: consDetalle,
     costoCons, costoMO, total:costoMO+costoCons,
     km, createdAt:Date.now(), creadoPor:me?.uid
   });
