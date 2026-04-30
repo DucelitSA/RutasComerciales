@@ -2554,7 +2554,7 @@ function calcCostoReg() {
   const total = costoMO + costoCons;
   const el = document.getElementById('reg-costo-resumen');
   const det = document.getElementById('reg-costo-detalle');
-  if (horas>0 && mec) {
+  if (horas>0 && mec && myTallerRole !== 'mecanico') {
     el.style.display='';
     det.innerHTML=`
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:12px">
