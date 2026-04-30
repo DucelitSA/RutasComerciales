@@ -1973,10 +1973,19 @@ function parseCSV(text){
             </div>
             <div class="fg form-full">
               <label class="flabel">Consumibles utilizados</label>
-              <div id="reg-consumibles-list" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"></div>
-              <select class="fselect" id="reg-cons-sel" onchange="addConsumible(this)">
-                <option value="">+ Agregar consumible...</option>
-              </select>
+              <div id="reg-consumibles-list" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px"></div>
+              <!-- Search + quantity row -->
+              <div style="display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap">
+                <div style="flex:1;min-width:180px;position:relative">
+                  <input class="finput" id="reg-cons-search" placeholder="🔍 Buscar consumible..." oninput="searchConsumible(this.value)" autocomplete="off" style="width:100%">
+                  <div id="reg-cons-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--w);border:1.5px solid var(--g5);border-top:none;border-radius:0 0 8px 8px;z-index:50;max-height:180px;overflow-y:auto;box-shadow:var(--sh2)"></div>
+                </div>
+                <div style="display:flex;gap:6px;align-items:center">
+                  <input class="finput" id="reg-cons-qty" type="number" min="0.1" step="0.1" placeholder="Cant. *" style="width:90px">
+                  <button class="btn btn-secondary" onclick="addConsumibleFromSearch()" type="button" style="white-space:nowrap">+ Agregar</button>
+                </div>
+              </div>
+              <span class="fhint" style="margin-top:4px;display:block">Escribí el nombre y seleccioná de la lista, luego ingresá la cantidad</span>
             </div>
             <div class="fg">
               <label class="flabel">Km actuales del vehículo</label>
@@ -2509,29 +2518,74 @@ function renderTRegistro() {
       '<option value="">Sin vehículos</option>';
   }
 
-  // Populate consumibles select
-  const consSel = document.getElementById('reg-cons-sel');
-  if (consSel) {
-    consSel.innerHTML = '<option value="">+ Agregar consumible...</option>' +
-      tConsumibles.map(c=>`<option value="${c.id}">${c.nombre} (${c.unidad})</option>`).join('');
-  }
+  // Reset consumibles search
+  const search = document.getElementById('reg-cons-search');
+  if (search) search.value = '';
+  consSeleccionado = null;
 
   // Set today as default
   if (!gv('reg-fecha')) sv('reg-fecha', new Date().toISOString().split('T')[0]);
 }
 
-window.addConsumible = sel => {
-  const id = sel.value; if (!id) return;
-  const c = tConsumibles.find(x=>x.id===id); if (!c) return;
-  if (regConsumiblesSeleccionados.find(x=>x.id===id)) { sel.value=''; return; }
-  // Ask quantity
-  const qty = parseFloat(prompt(`¿Cuántos/as ${c.unidad}(s) de "${c.nombre}"?`, '1'));
-  if (!qty || qty <= 0) { sel.value=''; return; }
-  regConsumiblesSeleccionados.push({...c, cantidad: qty});
-  sel.value = '';
+// Consumibles search
+let consSeleccionado = null; // currently highlighted consumible from search
+
+window.searchConsumible = q => {
+  const dd = document.getElementById('reg-cons-dropdown');
+  if (!q.trim()) { dd.style.display='none'; consSeleccionado=null; return; }
+  const results = tConsumibles.filter(c => c.nombre.toLowerCase().includes(q.toLowerCase()));
+  if (!results.length) {
+    dd.innerHTML='<div style="padding:8px 12px;font-size:12px;color:var(--s5)">Sin resultados</div>';
+    dd.style.display='';
+    return;
+  }
+  dd.innerHTML = results.map(c=>`
+    <div onclick="selectConsumible('${c.id}')" style="padding:9px 12px;font-size:12px;cursor:pointer;border-bottom:1px solid var(--s1);display:flex;justify-content:space-between;align-items:center">
+      <span><b>${c.nombre}</b> <span style="color:var(--s5)">${c.cat}</span></span>
+      <span style="color:var(--g7);font-size:11px;font-weight:600">${fmtUYU(c.precio)}/${c.unidad}</span>
+    </div>`).join('');
+  dd.style.display='';
+};
+
+window.selectConsumible = id => {
+  const c = tConsumibles.find(x=>x.id===id);
+  if (!c) return;
+  consSeleccionado = c;
+  document.getElementById('reg-cons-search').value = c.nombre;
+  document.getElementById('reg-cons-dropdown').style.display='none';
+  document.getElementById('reg-cons-qty').focus();
+};
+
+window.addConsumibleFromSearch = () => {
+  if (!consSeleccionado) { alert('Seleccioná un consumible de la lista primero.'); return; }
+  const qty = parseFloat(document.getElementById('reg-cons-qty').value);
+  if (!qty || qty <= 0) { alert('Ingresá una cantidad válida.'); return; }
+  if (regConsumiblesSeleccionados.find(x=>x.id===consSeleccionado.id)) {
+    alert('Ese consumible ya está en la lista.'); return;
+  }
+  regConsumiblesSeleccionados.push({...consSeleccionado, cantidad: qty});
+  // Reset
+  document.getElementById('reg-cons-search').value='';
+  document.getElementById('reg-cons-qty').value='';
+  document.getElementById('reg-cons-dropdown').style.display='none';
+  consSeleccionado = null;
   renderConsChips();
   calcCostoReg();
 };
+
+// Allow pressing Enter on qty field to add
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('reg-cons-qty')?.addEventListener('keydown', e => {
+    if (e.key==='Enter') { e.preventDefault(); addConsumibleFromSearch(); }
+  });
+  // Close dropdown on click outside
+  document.addEventListener('click', e => {
+    if (!e.target.closest('#reg-cons-search') && !e.target.closest('#reg-cons-dropdown')) {
+      const dd = document.getElementById('reg-cons-dropdown');
+      if (dd) dd.style.display='none';
+    }
+  });
+});
 
 function renderConsChips() {
   document.getElementById('reg-consumibles-list').innerHTML =
