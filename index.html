@@ -2263,6 +2263,10 @@ function enterTaller() {
     el.style.display = isJefe ? '' : 'none';
   });
 
+  // También ocultar dashboard tab para mecánicos
+  const dashTab = document.querySelector('[data-ttab="t-dashboard"]');
+  if (dashTab) dashTab.style.display = isJefe ? '' : 'none';
+
   listenTallerData();
   showTTab(isJefe ? 't-dashboard' : 't-registro');
 }
@@ -2314,6 +2318,8 @@ function refreshTaller() {
 }
 
 window.showTTab = tab => {
+  // Mecánicos can only access t-registro
+  if (myTallerRole === 'mecanico' && tab !== 't-registro') return;
   document.querySelectorAll('#taller-nav .nav-item').forEach(n => n.classList.toggle('active', n.dataset.ttab===tab));
   document.querySelectorAll('#screen-taller .panel').forEach(p => p.classList.remove('active'));
   document.getElementById('panel-'+tab)?.classList.add('active');
